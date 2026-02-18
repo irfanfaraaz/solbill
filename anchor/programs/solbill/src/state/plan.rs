@@ -1,9 +1,7 @@
 use anchor_lang::prelude::*;
 
-/// Size: 8 (discriminator) + 32 + 32 + 8 + 8 + 1 + 8 + 2 + 1 + 8 = 108
-pub const PLAN_ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 8 + 1 + 8 + 2 + 1 + 8;
-
 #[account]
+#[derive(InitSpace)]
 pub struct PlanAccount {
     /// Parent `ServiceAccount` pubkey.
     pub service: Pubkey,
@@ -21,6 +19,8 @@ pub struct PlanAccount {
     pub grace_period: i64,
     /// Index of this plan within the service (used in PDA seeds).
     pub plan_index: u16,
+    /// Limit on number of billing cycles (0 = infinite, 1 = one-time).
+    pub max_billing_cycles: u64,
     /// PDA bump seed.
     pub bump: u8,
 }

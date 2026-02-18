@@ -3,7 +3,7 @@ use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
-use crate::errors::SolscribeError;
+use crate::errors::SolBillError;
 
 pub fn execute_token_transfer<'info>(
     token_program: &Interface<'info, TokenInterface>,
@@ -20,7 +20,7 @@ pub fn execute_token_transfer<'info>(
     let treasury_amount = if to_cranker.is_some() && crank_reward > 0 {
         amount
             .checked_sub(crank_reward)
-            .ok_or(SolscribeError::Overflow)?
+            .ok_or(SolBillError::Overflow)?
     } else {
         amount
     };

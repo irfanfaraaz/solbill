@@ -7,13 +7,11 @@ pub enum SubscriptionStatus {
     PastDue,
     Cancelled,
     Expired,
+    Completed,
 }
 
-/// Size: 8 (discriminator) + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1 (enum) + 4 + 1 = 190
-pub const SUBSCRIPTION_ACCOUNT_SIZE: usize =
-    8 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1 + 4 + 1;
-
 #[account]
+#[derive(InitSpace)]
 pub struct SubscriptionAccount {
     /// The subscriber's wallet address.
     pub subscriber: Pubkey,
@@ -39,6 +37,8 @@ pub struct SubscriptionAccount {
     pub status: SubscriptionStatus,
     /// Total number of successful payments collected.
     pub payments_made: u32,
+    /// Limit on number of billing cycles (0 = infinite).
+    pub max_billing_cycles: u64,
     /// PDA bump seed.
     pub bump: u8,
 }

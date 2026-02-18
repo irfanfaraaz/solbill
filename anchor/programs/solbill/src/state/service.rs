@@ -1,9 +1,7 @@
 use anchor_lang::prelude::*;
 
-/// Size: 8 (discriminator) + 32 + 32 + 32 + 2 + 4 + 8 + 1 = 119
-pub const SERVICE_ACCOUNT_SIZE: usize = 8 + 32 + 32 + 32 + 2 + 4 + 8 + 1;
-
 #[account]
+#[derive(InitSpace)]
 pub struct ServiceAccount {
     /// The merchant's wallet address (owner/authority).
     pub authority: Pubkey,

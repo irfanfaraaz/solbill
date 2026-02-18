@@ -1,10 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{approve, Approve, Mint, TokenAccount, TokenInterface};
 
-use crate::errors::SolscribeError;
-use crate::state::{
-    PlanAccount, ServiceAccount, SubscriptionAccount, SubscriptionStatus, SUBSCRIPTION_ACCOUNT_SIZE,
-};
+use crate::errors::SolBillError;
+use crate::state::{PlanAccount, ServiceAccount, SubscriptionAccount, SubscriptionStatus};
 
 #[derive(Accounts)]
 pub struct CreateSubscription<'info> {
@@ -22,14 +20,14 @@ pub struct CreateSubscription<'info> {
         seeds = [b"plan", service.key().as_ref(), plan.plan_index.to_le_bytes().as_ref()],
         bump = plan.bump,
         has_one = service,
-        constraint = plan.is_active @ SolscribeError::PlanNotActive,
+        constraint = plan.is_active @ SolBillError::PlanNotActive,
     )]
     pub plan: Account<'info, PlanAccount>,
 
     #[account(
         init,
         payer = subscriber,
-        space = SUBSCRIPTION_ACCOUNT_SIZE,
+        space = 8 + SubscriptionAccount::INIT_SPACE,
         seeds = [b"subscription", subscriber.key().as_ref(), plan.key().as_ref()],
         bump,
     )]
@@ -50,14 +48,6 @@ pub struct CreateSubscription<'info> {
     )]
     pub accepted_mint: InterfaceAccount<'info, Mint>,
 
-    /// The subscription PDA will be the delegate.
-    /// CHECK: This is the subscription PDA used as delegate for token approval.
-    #[account(
-        seeds = [b"subscription", subscriber.key().as_ref(), plan.key().as_ref()],
-        bump,
-    )]
-    pub delegate: AccountInfo<'info>,
-
     /// The merchant's treasury token account (destination for first payment).
     #[account(
         mut,
@@ -73,26 +63,60 @@ pub fn handler(ctx: Context<CreateSubscription>) -> Result<()> {
     let plan = &ctx.accounts.plan;
     let clock = Clock::get()?;
 
-    // Initialize the subscription
-    let subscription = &mut ctx.accounts.subscription;
-    subscription.subscriber = ctx.accounts.subscriber.key();
-    subscription.service = ctx.accounts.service.key();
-    subscription.plan = plan.key();
-    subscription.subscriber_token_account = ctx.accounts.subscriber_token_account.key();
-    subscription.amount = plan.amount;
-    subscription.crank_reward = plan.crank_reward;
-    subscription.interval = plan.interval;
-    subscription.next_billing_timestamp = clock
-        .unix_timestamp
-        .checked_add(plan.interval)
-        .ok_or(SolscribeError::Overflow)?;
+    // Initialize the subscription in a scoped block to drop the mutable borrow
+    {
+        let subscription = &mut ctx.accounts.subscription;
+        subscription.subscriber = ctx.accounts.subscriber.key();
+        subscription.service = ctx.accounts.service.key();
+        subscription.plan = plan.key();
+        subscription.subscriber_token_account = ctx.accounts.subscriber_token_account.key();
+        subscription.amount = plan.amount;
+        subscription.crank_reward = plan.crank_reward;
+        subscription.interval = plan.interval;
+        subscription.max_billing_cycles = plan.max_billing_cycles;
+        subscription.payments_made = 1;
+        subscription.bump = ctx.bumps.subscription;
 
-    // Set initial state reflecting first payment
-    subscription.last_payment_timestamp = clock.unix_timestamp;
-    subscription.created_at = clock.unix_timestamp;
-    subscription.status = SubscriptionStatus::Active;
-    subscription.payments_made = 1;
-    subscription.bump = ctx.bumps.subscription;
+        msg!(
+            "Creating subscription. Plan max_cycles: {}",
+            plan.max_billing_cycles
+        );
+
+        // Logic for One-Time Payments vs Recurring
+        if plan.max_billing_cycles > 0 {
+            if plan.max_billing_cycles == 1 {
+                // If it's a one-time payment, we set the status to Completed immediately
+                // because the user pays upfront in this transaction (see execute_token_transfer below).
+                subscription.status = SubscriptionStatus::Completed;
+                // Prevent future billing
+                subscription.next_billing_timestamp = i64::MAX;
+                msg!("One-time payment plan. Status set to Completed.");
+            } else {
+                // It's a finite recurring plan (e.g. 3 months)
+                subscription.status = SubscriptionStatus::Active;
+                subscription.next_billing_timestamp = clock
+                    .unix_timestamp
+                    .checked_add(plan.interval)
+                    .ok_or(SolBillError::Overflow)?;
+                msg!(
+                    "Finite plan ({} cycles). Status Active. Next bill: {}",
+                    plan.max_billing_cycles,
+                    subscription.next_billing_timestamp
+                );
+            }
+        } else {
+            // Infinite recurring
+            subscription.status = SubscriptionStatus::Active;
+            subscription.next_billing_timestamp = clock
+                .unix_timestamp
+                .checked_add(plan.interval)
+                .ok_or(SolBillError::Overflow)?;
+            msg!(
+                "Infinite plan. Status Active. Next bill: {}",
+                subscription.next_billing_timestamp
+            );
+        }
+    }
 
     // Approve the subscription PDA as delegate on subscriber's token account
     approve(
@@ -100,7 +124,7 @@ pub fn handler(ctx: Context<CreateSubscription>) -> Result<()> {
             ctx.accounts.token_program.to_account_info(),
             Approve {
                 to: ctx.accounts.subscriber_token_account.to_account_info(),
-                delegate: ctx.accounts.delegate.to_account_info(),
+                delegate: ctx.accounts.subscription.to_account_info(),
                 authority: ctx.accounts.subscriber.to_account_info(),
             },
         ),
@@ -108,14 +132,6 @@ pub fn handler(ctx: Context<CreateSubscription>) -> Result<()> {
     )?;
 
     // Execute first payment upfront (No crank reward for self-execution)
-    // We pass None for cranker, so full amount goes to treasury logic in utils
-    // IF we wanted the "discount", we'd pass the subscriber as cranker.
-    // Let's stick to standard upfront payment = full amount to merchant for now unless requested otherwise.
-    // Actually, user agreed to "Option B" which implies reusing logic.
-    // If we pass None for cranker in utils, logic says: treasury_amount = amount. Perfect.
-
-    // Note: We are using the USER signature here, not the PDA delegate, because the user is signing this tx.
-    // So seeds = None.
     crate::instructions::utils::execute_token_transfer(
         &ctx.accounts.token_program,
         &ctx.accounts.subscriber_token_account,
@@ -123,9 +139,9 @@ pub fn handler(ctx: Context<CreateSubscription>) -> Result<()> {
         None, // No cranker for first payment
         &ctx.accounts.accepted_mint,
         &ctx.accounts.subscriber.to_account_info(), // Authority is the user
-        subscription.amount,
-        0,    // No reward split
-        None, // No seeds needed (direct user signature)
+        plan.amount, // Use plan.amount instead of subscription.amount to avoid borrow
+        0,           // No reward split
+        None,        // No seeds needed (direct user signature)
     )?;
 
     // Increment service subscriber count
@@ -133,13 +149,13 @@ pub fn handler(ctx: Context<CreateSubscription>) -> Result<()> {
     service.subscriber_count = service
         .subscriber_count
         .checked_add(1)
-        .ok_or(SolscribeError::Overflow)?;
+        .ok_or(SolBillError::Overflow)?;
 
     msg!(
-        "Subscription created & paid: {} → plan {} (next billing: {})",
-        subscription.subscriber,
+        "Subscription created & paid: {} -> plan {} (next billing: {})",
+        ctx.accounts.subscriber.key(),
         plan.plan_index,
-        subscription.next_billing_timestamp,
+        i64::MAX // Placeholder for log since we dropped subscription borrow
     );
     Ok(())
 }

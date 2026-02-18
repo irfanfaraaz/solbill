@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+#![allow(unexpected_cfgs)]
 use anchor_lang::prelude::*;
 
 pub mod errors;
@@ -28,8 +30,17 @@ pub mod solbill {
         crank_reward: u64,
         interval: i64,
         grace_period: i64,
+        max_billing_cycles: u64,
     ) -> Result<()> {
-        instructions::create_plan::handler(ctx, name, amount, crank_reward, interval, grace_period)
+        instructions::create_plan::handler(
+            ctx,
+            name,
+            amount,
+            crank_reward,
+            interval,
+            grace_period,
+            max_billing_cycles,
+        )
     }
 
     /// Merchant: Update a plan's fields (does not affect existing subscriptions).

@@ -26,4 +26,6 @@ pub enum SolBillError {
     NotPastDue,
     #[msg("Invalid crank reward — must be less than plan amount")]
     InvalidCrankReward,
+    #[msg("Subscription has completed all billing cycles")]
+    SubscriptionCompleted,
 }

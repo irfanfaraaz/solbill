@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
-use crate::state::{ServiceAccount, SERVICE_ACCOUNT_SIZE};
+use crate::state::ServiceAccount;
 
 #[derive(Accounts)]
 pub struct InitializeService<'info> {
@@ -11,7 +11,7 @@ pub struct InitializeService<'info> {
     #[account(
         init,
         payer = authority,
-        space = SERVICE_ACCOUNT_SIZE,
+        space = 8 + ServiceAccount::INIT_SPACE,
         seeds = [b"service", authority.key().as_ref()],
         bump,
     )]

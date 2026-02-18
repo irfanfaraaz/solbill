@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{revoke, Revoke, TokenAccount, TokenInterface};
 
-use crate::errors::SolscribeError;
+use crate::errors::SolBillError;
 use crate::state::{ServiceAccount, SubscriptionAccount, SubscriptionStatus};
 
 #[derive(Accounts)]
@@ -21,7 +21,7 @@ pub struct CancelSubscription<'info> {
         bump = subscription.bump,
         has_one = subscriber,
         has_one = service,
-        constraint = subscription.status != SubscriptionStatus::Cancelled @ SolscribeError::AlreadyCancelled,
+        constraint = subscription.status != SubscriptionStatus::Cancelled @ SolBillError::AlreadyCancelled,
     )]
     pub subscription: Account<'info, SubscriptionAccount>,
 

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::SolscribeError;
-use crate::state::{PlanAccount, ServiceAccount, PLAN_ACCOUNT_SIZE};
+use crate::errors::SolBillError;
+use crate::state::{PlanAccount, ServiceAccount};
 
 #[derive(Accounts)]
 pub struct CreatePlan<'info> {
@@ -12,14 +12,14 @@ pub struct CreatePlan<'info> {
         mut,
         seeds = [b"service", authority.key().as_ref()],
         bump = service.bump,
-        has_one = authority @ SolscribeError::UnauthorizedAuthority,
+        has_one = authority @ SolBillError::UnauthorizedAuthority,
     )]
     pub service: Account<'info, ServiceAccount>,
 
     #[account(
         init,
         payer = authority,
-        space = PLAN_ACCOUNT_SIZE,
+        space = 8 + PlanAccount::INIT_SPACE,
         seeds = [b"plan", service.key().as_ref(), service.plan_count.to_le_bytes().as_ref()],
         bump,
     )]
@@ -35,14 +35,15 @@ pub fn handler(
     crank_reward: u64,
     interval: i64,
     grace_period: i64,
+    max_billing_cycles: u64,
 ) -> Result<()> {
     require!(
         !name.is_empty() && name.len() <= 32,
-        SolscribeError::InvalidPlanName
+        SolBillError::InvalidPlanName
     );
-    require!(amount > 0, SolscribeError::InvalidAmount);
-    require!(interval > 0, SolscribeError::InvalidInterval);
-    require!(crank_reward < amount, SolscribeError::InvalidCrankReward);
+    require!(amount > 0, SolBillError::InvalidAmount);
+    require!(interval > 0, SolBillError::InvalidInterval);
+    require!(crank_reward < amount, SolBillError::InvalidCrankReward);
 
     let plan = &mut ctx.accounts.plan;
     let service = &mut ctx.accounts.service;
@@ -61,13 +62,14 @@ pub fn handler(
     plan.is_active = true;
     plan.grace_period = grace_period;
     plan.plan_index = service.plan_count;
+    plan.max_billing_cycles = max_billing_cycles;
     plan.bump = ctx.bumps.plan;
 
     // Increment the service's plan counter
     service.plan_count = service
         .plan_count
         .checked_add(1)
-        .ok_or(SolscribeError::Overflow)?;
+        .ok_or(SolBillError::Overflow)?;
 
     msg!(
         "Plan '{}' created (index {}) — {} tokens every {}s (Crank Reward: {})",

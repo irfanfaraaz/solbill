@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{approve, revoke, Approve, Revoke, TokenAccount, TokenInterface};
 
-use crate::errors::SolscribeError;
+use crate::errors::SolBillError;
 use crate::state::{PlanAccount, ServiceAccount, SubscriptionAccount, SubscriptionStatus};
 
 #[derive(Accounts)]
@@ -27,7 +27,7 @@ pub struct ChangePlan<'info> {
         seeds = [b"plan", service.key().as_ref(), new_plan.plan_index.to_le_bytes().as_ref()],
         bump = new_plan.bump,
         has_one = service,
-        constraint = new_plan.is_active @ SolscribeError::PlanNotActive,
+        constraint = new_plan.is_active @ SolBillError::PlanNotActive,
     )]
     pub new_plan: Account<'info, PlanAccount>,
 
@@ -38,7 +38,7 @@ pub struct ChangePlan<'info> {
         has_one = subscriber,
         has_one = service,
         constraint = subscription.plan == old_plan.key(),
-        constraint = subscription.status == SubscriptionStatus::Active @ SolscribeError::SubscriptionNotActive,
+        constraint = subscription.status == SubscriptionStatus::Active @ SolBillError::SubscriptionNotActive,
     )]
     pub subscription: Account<'info, SubscriptionAccount>,
 

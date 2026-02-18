@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::SolscribeError;
+use crate::errors::SolBillError;
 use crate::state::{PlanAccount, ServiceAccount};
 
 #[derive(Accounts)]
@@ -10,7 +10,7 @@ pub struct UpdatePlan<'info> {
     #[account(
         seeds = [b"service", authority.key().as_ref()],
         bump = service.bump,
-        has_one = authority @ SolscribeError::UnauthorizedAuthority,
+        has_one = authority @ SolBillError::UnauthorizedAuthority,
     )]
     pub service: Account<'info, ServiceAccount>,
 
@@ -34,18 +34,18 @@ pub fn handler(
     let plan = &mut ctx.accounts.plan;
 
     if let Some(amount) = new_amount {
-        require!(amount > 0, SolscribeError::InvalidAmount);
+        require!(amount > 0, SolBillError::InvalidAmount);
         plan.amount = amount;
     }
     if let Some(cranker_reward) = new_cranker_reward {
         require!(
             cranker_reward < plan.amount,
-            SolscribeError::InvalidCrankReward
+            SolBillError::InvalidCrankReward
         );
         plan.crank_reward = cranker_reward;
     }
     if let Some(interval) = new_interval {
-        require!(interval > 0, SolscribeError::InvalidInterval);
+        require!(interval > 0, SolBillError::InvalidInterval);
         plan.interval = interval;
     }
     if let Some(is_active) = new_is_active {

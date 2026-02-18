@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::state::SubscriptionAccount;
     use crate::ID as PROGRAM_ID;
-    use anchor_lang::{AccountDeserialize, AnchorDeserialize};
-    use anchor_spl::associated_token::get_associated_token_address;
+    use anchor_lang::prelude::*;
     use litesvm::LiteSVM;
     use solana_sdk::program_pack::Pack;
     use solana_sdk::{
@@ -147,6 +145,7 @@ mod tests {
         plan_ix_data.extend_from_slice(&crank_reward.to_le_bytes());
         plan_ix_data.extend_from_slice(&interval.to_le_bytes());
         plan_ix_data.extend_from_slice(&grace_period.to_le_bytes());
+        plan_ix_data.extend_from_slice(&0u64.to_le_bytes()); // max_billing_cycles = 0 (infinite)
 
         let plan_ix = Instruction {
             program_id: PROGRAM_ID,
@@ -332,6 +331,7 @@ mod tests {
         plan_data.extend_from_slice(&crank_reward.to_le_bytes());
         plan_data.extend_from_slice(&interval.to_le_bytes());
         plan_data.extend_from_slice(&3600i64.to_le_bytes()); // grace period
+        plan_data.extend_from_slice(&0u64.to_le_bytes()); // max_billing_cycles = 0 (infinite)
 
         let plan_ix = Instruction {
             program_id: PROGRAM_ID,
@@ -362,8 +362,7 @@ mod tests {
                 AccountMeta::new(sub_pda, false),
                 AccountMeta::new(subscriber_token, false),
                 AccountMeta::new_readonly(mint, false),
-                AccountMeta::new_readonly(sub_pda, false), // delegate
-                AccountMeta::new(treasury, false),         // Treasury added for upfront payment
+                AccountMeta::new(treasury, false),
                 AccountMeta::new_readonly(spl_token::ID, false),
                 AccountMeta::new_readonly(system_program::ID, false),
             ],
@@ -400,7 +399,6 @@ mod tests {
                 AccountMeta::new(treasury, false),
                 AccountMeta::new(cranker_token, false),
                 AccountMeta::new_readonly(mint, false),
-                AccountMeta::new_readonly(sub_pda, false),
                 AccountMeta::new_readonly(spl_token::ID, false),
             ],
             data: get_discriminator("collect_payment").to_vec(),
@@ -430,6 +428,413 @@ mod tests {
             "🚀 Cranker received bounty: {} tokens",
             cranker_token_acc.amount
         );
+    }
+
+    #[test]
+    fn test_one_time_payment_plan() {
+        let mut svm = LiteSVM::new();
+        let program_bytes = include_bytes!("../../../target/deploy/solbill.so");
+        let _ = svm.add_program(PROGRAM_ID, program_bytes);
+
+        let merchant = Keypair::new();
+        let subscriber = Keypair::new();
+        let mint = Pubkey::new_unique();
+        let treasury = Pubkey::new_unique();
+        let subscriber_token = Pubkey::new_unique();
+
+        svm.airdrop(&merchant.pubkey(), LAMPORTS_PER_SOL).unwrap();
+        svm.airdrop(&subscriber.pubkey(), LAMPORTS_PER_SOL).unwrap();
+
+        // Mint Setup
+        let mut mint_data = vec![0u8; Mint::LEN];
+        Mint::pack(
+            Mint {
+                mint_authority: solana_sdk::program_option::COption::Some(merchant.pubkey()),
+                supply: 100_000_000,
+                decimals: 6,
+                is_initialized: true,
+                freeze_authority: solana_sdk::program_option::COption::None,
+            },
+            &mut mint_data,
+        )
+        .unwrap();
+        svm.set_account(
+            mint,
+            solana_sdk::account::Account {
+                lamports: 100000000,
+                data: mint_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        // Account Setup (Treasury & Subscriber)
+        let mut treasury_data = vec![0u8; TokenAccount::LEN];
+        TokenAccount::pack(
+            TokenAccount {
+                mint,
+                owner: merchant.pubkey(),
+                amount: 0,
+                state: spl_token::state::AccountState::Initialized,
+                ..TokenAccount::default()
+            },
+            &mut treasury_data,
+        )
+        .unwrap();
+        svm.set_account(
+            treasury,
+            solana_sdk::account::Account {
+                lamports: 100000000,
+                data: treasury_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut sub_token_data = vec![0u8; TokenAccount::LEN];
+        TokenAccount::pack(
+            TokenAccount {
+                mint,
+                owner: subscriber.pubkey(),
+                amount: 10_000_000,
+                state: spl_token::state::AccountState::Initialized,
+                ..Default::default()
+            },
+            &mut sub_token_data,
+        )
+        .unwrap();
+        svm.set_account(
+            subscriber_token,
+            solana_sdk::account::Account {
+                lamports: 100000000,
+                data: sub_token_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        // 1. Initialize Service
+        let (service_pda, _) = get_service_pda(&merchant.pubkey());
+        let init_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(merchant.pubkey(), true),
+                AccountMeta::new(service_pda, false),
+                AccountMeta::new_readonly(mint, false),
+                AccountMeta::new_readonly(treasury, false),
+                AccountMeta::new_readonly(spl_token::ID, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: get_discriminator("initialize_service").to_vec(),
+        };
+        svm.send_transaction(Transaction::new_signed_with_payer(
+            &[init_ix],
+            Some(&merchant.pubkey()),
+            &[&merchant],
+            svm.latest_blockhash(),
+        ))
+        .unwrap();
+
+        // 2. Create One-Time Plan (max_cycles = 1)
+        let (plan_pda, _) = get_plan_pda(&service_pda, 0);
+        let amount: u64 = 5_000_000;
+        let mut plan_data = get_discriminator("create_plan").to_vec();
+        plan_data.extend_from_slice(&8u32.to_le_bytes()); // name len
+        plan_data.extend_from_slice(b"One Time");
+        plan_data.extend_from_slice(&amount.to_le_bytes());
+        plan_data.extend_from_slice(&0u64.to_le_bytes()); // reward
+        plan_data.extend_from_slice(&3600i64.to_le_bytes());
+        plan_data.extend_from_slice(&3600i64.to_le_bytes());
+        plan_data.extend_from_slice(&1u64.to_le_bytes()); // max_billing_cycles = 1 (One-time)
+
+        let plan_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(merchant.pubkey(), true),
+                AccountMeta::new(service_pda, false),
+                AccountMeta::new(plan_pda, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: plan_data,
+        };
+        svm.send_transaction(Transaction::new_signed_with_payer(
+            &[plan_ix],
+            Some(&merchant.pubkey()),
+            &[&merchant],
+            svm.latest_blockhash(),
+        ))
+        .unwrap();
+
+        // 3. Create Subscription
+        let (sub_pda, _) = get_subscription_pda(&subscriber.pubkey(), &plan_pda);
+        let sub_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(subscriber.pubkey(), true),
+                AccountMeta::new(service_pda, false),
+                AccountMeta::new_readonly(plan_pda, false),
+                AccountMeta::new(sub_pda, false),
+                AccountMeta::new(subscriber_token, false),
+                AccountMeta::new_readonly(mint, false),
+                AccountMeta::new(treasury, false),
+                AccountMeta::new_readonly(spl_token::ID, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: get_discriminator("create_subscription").to_vec(),
+        };
+        svm.send_transaction(Transaction::new_signed_with_payer(
+            &[sub_ix],
+            Some(&subscriber.pubkey()),
+            &[&subscriber],
+            svm.latest_blockhash(),
+        ))
+        .unwrap();
+
+        // 4. Verify Completed Status
+        let sub_account_data = svm.get_account(&sub_pda).unwrap().data;
+        // Verify Status is Completed. Offset:
+        // Discriminator(8) + Key(32) + Key(32) + Key(32) + Key(32) + Amount(8) + Reward(8) + Interval(8) + NextBilling(8) + LastPayment(8) + CreatedAt(8) + Status(1)
+        // 8+32+32+32+32 = 136
+        // 136 + 8+8+8+8+8+8 = 184
+        // Status is at index 184
+        let status_byte = sub_account_data[184];
+        // 0=Active, 1=PastDue, 2=Cancelled, 3=Expired, 4=Completed
+        assert_eq!(
+            status_byte, 4,
+            "Subscription should be Completed (enum variant 4)"
+        );
+
+        let payments_made = u32::from_le_bytes(sub_account_data[185..189].try_into().unwrap());
+        assert_eq!(payments_made, 1, "Should have made 1 payment");
+    }
+
+    #[test]
+    fn test_fixed_term_plan() {
+        let mut svm = LiteSVM::new();
+        let program_bytes = include_bytes!("../../../target/deploy/solbill.so");
+        let _ = svm.add_program(PROGRAM_ID, program_bytes);
+        let merchant = Keypair::new();
+        let subscriber = Keypair::new();
+        let cranker = Keypair::new();
+        let mint = Pubkey::new_unique();
+        let treasury = Pubkey::new_unique();
+        let subscriber_token = Pubkey::new_unique();
+        let cranker_token = Pubkey::new_unique();
+
+        svm.airdrop(&merchant.pubkey(), LAMPORTS_PER_SOL).unwrap();
+        svm.airdrop(&subscriber.pubkey(), LAMPORTS_PER_SOL).unwrap();
+        svm.airdrop(&cranker.pubkey(), LAMPORTS_PER_SOL).unwrap();
+
+        // Mint & Accounts
+        let mut mint_data = vec![0u8; Mint::LEN];
+        Mint::pack(
+            Mint {
+                mint_authority: solana_sdk::program_option::COption::Some(merchant.pubkey()),
+                supply: 100_000_000,
+                decimals: 6,
+                is_initialized: true,
+                freeze_authority: solana_sdk::program_option::COption::None,
+            },
+            &mut mint_data,
+        )
+        .unwrap();
+        svm.set_account(
+            mint,
+            solana_sdk::account::Account {
+                lamports: 100000000,
+                data: mint_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut treasury_data = vec![0u8; TokenAccount::LEN];
+        TokenAccount::pack(
+            TokenAccount {
+                mint,
+                owner: merchant.pubkey(),
+                state: spl_token::state::AccountState::Initialized,
+                ..TokenAccount::default()
+            },
+            &mut treasury_data,
+        )
+        .unwrap();
+        svm.set_account(
+            treasury,
+            solana_sdk::account::Account {
+                lamports: 100000000,
+                data: treasury_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut cranker_token_data = vec![0u8; TokenAccount::LEN];
+        TokenAccount::pack(
+            TokenAccount {
+                mint,
+                owner: cranker.pubkey(),
+                state: spl_token::state::AccountState::Initialized,
+                ..TokenAccount::default()
+            },
+            &mut cranker_token_data,
+        )
+        .unwrap();
+        svm.set_account(
+            cranker_token,
+            solana_sdk::account::Account {
+                lamports: 100000000,
+                data: cranker_token_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let mut sub_token_data = vec![0u8; TokenAccount::LEN];
+        TokenAccount::pack(
+            TokenAccount {
+                mint,
+                owner: subscriber.pubkey(),
+                amount: 20_000_000,
+                state: spl_token::state::AccountState::Initialized,
+                ..Default::default()
+            },
+            &mut sub_token_data,
+        )
+        .unwrap();
+        svm.set_account(
+            subscriber_token,
+            solana_sdk::account::Account {
+                lamports: 100000000,
+                data: sub_token_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        // Init Service
+        let (service_pda, _) = get_service_pda(&merchant.pubkey());
+        let init_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(merchant.pubkey(), true),
+                AccountMeta::new(service_pda, false),
+                AccountMeta::new_readonly(mint, false),
+                AccountMeta::new_readonly(treasury, false),
+                AccountMeta::new_readonly(spl_token::ID, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: get_discriminator("initialize_service").to_vec(),
+        };
+        svm.send_transaction(Transaction::new_signed_with_payer(
+            &[init_ix],
+            Some(&merchant.pubkey()),
+            &[&merchant],
+            svm.latest_blockhash(),
+        ))
+        .unwrap();
+
+        // Create 2-Cycle Plan
+        let (plan_pda, _) = get_plan_pda(&service_pda, 0);
+        let amount: u64 = 5_000_000;
+        let mut plan_data = get_discriminator("create_plan").to_vec();
+        plan_data.extend_from_slice(&7u32.to_le_bytes());
+        plan_data.extend_from_slice(b"2Cycles");
+        plan_data.extend_from_slice(&amount.to_le_bytes());
+        plan_data.extend_from_slice(&100_000u64.to_le_bytes());
+        plan_data.extend_from_slice(&3600i64.to_le_bytes());
+        plan_data.extend_from_slice(&3600i64.to_le_bytes());
+        plan_data.extend_from_slice(&2u64.to_le_bytes()); // max_billing_cycles = 2
+
+        let plan_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(merchant.pubkey(), true),
+                AccountMeta::new(service_pda, false),
+                AccountMeta::new(plan_pda, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: plan_data,
+        };
+        svm.send_transaction(Transaction::new_signed_with_payer(
+            &[plan_ix],
+            Some(&merchant.pubkey()),
+            &[&merchant],
+            svm.latest_blockhash(),
+        ))
+        .unwrap();
+
+        // Subscribe (Payment 1/2)
+        let (sub_pda, _) = get_subscription_pda(&subscriber.pubkey(), &plan_pda);
+        let sub_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(subscriber.pubkey(), true),
+                AccountMeta::new(service_pda, false),
+                AccountMeta::new_readonly(plan_pda, false),
+                AccountMeta::new(sub_pda, false),
+                AccountMeta::new(subscriber_token, false),
+                AccountMeta::new_readonly(mint, false),
+                AccountMeta::new(treasury, false),
+                AccountMeta::new_readonly(spl_token::ID, false),
+                AccountMeta::new_readonly(system_program::ID, false),
+            ],
+            data: get_discriminator("create_subscription").to_vec(),
+        };
+        svm.send_transaction(Transaction::new_signed_with_payer(
+            &[sub_ix],
+            Some(&subscriber.pubkey()),
+            &[&subscriber],
+            svm.latest_blockhash(),
+        ))
+        .unwrap();
+
+        // Verify Active (1/2 paid)
+        let sub_data = svm.get_account(&sub_pda).unwrap().data;
+        assert_eq!(sub_data[184], 0); // Active (Status Offset 184)
+        let payments = u32::from_le_bytes(sub_data[185..189].try_into().unwrap());
+        assert_eq!(payments, 1);
+
+        // Advance Clock
+        let mut clock = svm.get_sysvar::<Clock>();
+        clock.unix_timestamp += 3601;
+        svm.set_sysvar::<Clock>(&clock);
+
+        // Collect (Payment 2/2)
+        let collect_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(cranker.pubkey(), true),
+                AccountMeta::new_readonly(service_pda, false),
+                AccountMeta::new(sub_pda, false),
+                AccountMeta::new(subscriber_token, false),
+                AccountMeta::new(treasury, false),
+                AccountMeta::new(cranker_token, false),
+                AccountMeta::new_readonly(mint, false),
+                AccountMeta::new_readonly(spl_token::ID, false),
+            ],
+            data: get_discriminator("collect_payment").to_vec(),
+        };
+        svm.send_transaction(Transaction::new_signed_with_payer(
+            &[collect_ix],
+            Some(&cranker.pubkey()),
+            &[&cranker],
+            svm.latest_blockhash(),
+        ))
+        .unwrap();
+
+        // Verify Completed (2/2 paid)
+        let sub_data = svm.get_account(&sub_pda).unwrap().data;
+        assert_eq!(sub_data[184], 4); // Completed
+        let payments = u32::from_le_bytes(sub_data[185..189].try_into().unwrap());
+        assert_eq!(payments, 2);
     }
 
     #[test]

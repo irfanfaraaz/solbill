@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::SolscribeError;
+use crate::errors::SolBillError;
 use crate::state::{PlanAccount, SubscriptionAccount, SubscriptionStatus};
 
 #[derive(Accounts)]
@@ -19,7 +19,7 @@ pub struct ExpireSubscription<'info> {
         seeds = [b"subscription", subscription.subscriber.as_ref(), subscription.plan.as_ref()],
         bump = subscription.bump,
         constraint = subscription.plan == plan.key(),
-        constraint = subscription.status == SubscriptionStatus::PastDue @ SolscribeError::NotPastDue,
+        constraint = subscription.status == SubscriptionStatus::PastDue @ SolBillError::NotPastDue,
     )]
     pub subscription: Account<'info, SubscriptionAccount>,
 }
@@ -33,11 +33,11 @@ pub fn handler(ctx: Context<ExpireSubscription>) -> Result<()> {
     let expiry_time = subscription
         .next_billing_timestamp
         .checked_add(plan.grace_period)
-        .ok_or(SolscribeError::Overflow)?;
+        .ok_or(SolBillError::Overflow)?;
 
     require!(
         clock.unix_timestamp >= expiry_time,
-        SolscribeError::GracePeriodNotElapsed,
+        SolBillError::GracePeriodNotElapsed,
     );
 
     subscription.status = SubscriptionStatus::Expired;
