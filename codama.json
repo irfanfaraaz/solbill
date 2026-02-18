@@ -1,10 +1,12 @@
 {
-  "idl": "./anchor/target/idl/vault.json",
+  "idl": "./anchor/target/idl/solbill.json",
   "scripts": {
     "js": [
       {
         "from": "@codama/renderers-js",
-        "args": ["./app/generated/vault"]
+        "args": [
+          "./app/generated/solbill"
+        ]
       }
     ]
   }
