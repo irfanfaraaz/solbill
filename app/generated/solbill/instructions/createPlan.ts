@@ -90,6 +90,7 @@ export type CreatePlanInstructionData = {
   discriminator: ReadonlyUint8Array;
   name: string;
   amount: bigint;
+  crankReward: bigint;
   interval: bigint;
   gracePeriod: bigint;
 };
@@ -97,6 +98,7 @@ export type CreatePlanInstructionData = {
 export type CreatePlanInstructionDataArgs = {
   name: string;
   amount: number | bigint;
+  crankReward: number | bigint;
   interval: number | bigint;
   gracePeriod: number | bigint;
 };
@@ -107,6 +109,7 @@ export function getCreatePlanInstructionDataEncoder(): Encoder<CreatePlanInstruc
       ["discriminator", fixEncoderSize(getBytesEncoder(), 8)],
       ["name", addEncoderSizePrefix(getUtf8Encoder(), getU32Encoder())],
       ["amount", getU64Encoder()],
+      ["crankReward", getU64Encoder()],
       ["interval", getI64Encoder()],
       ["gracePeriod", getI64Encoder()],
     ]),
@@ -119,6 +122,7 @@ export function getCreatePlanInstructionDataDecoder(): Decoder<CreatePlanInstruc
     ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
     ["name", addDecoderSizePrefix(getUtf8Decoder(), getU32Decoder())],
     ["amount", getU64Decoder()],
+    ["crankReward", getU64Decoder()],
     ["interval", getI64Decoder()],
     ["gracePeriod", getI64Decoder()],
   ]);
@@ -146,6 +150,7 @@ export type CreatePlanAsyncInput<
   systemProgram?: Address<TAccountSystemProgram>;
   name: CreatePlanInstructionDataArgs["name"];
   amount: CreatePlanInstructionDataArgs["amount"];
+  crankReward: CreatePlanInstructionDataArgs["crankReward"];
   interval: CreatePlanInstructionDataArgs["interval"];
   gracePeriod: CreatePlanInstructionDataArgs["gracePeriod"];
 };
@@ -241,6 +246,7 @@ export type CreatePlanInput<
   systemProgram?: Address<TAccountSystemProgram>;
   name: CreatePlanInstructionDataArgs["name"];
   amount: CreatePlanInstructionDataArgs["amount"];
+  crankReward: CreatePlanInstructionDataArgs["crankReward"];
   interval: CreatePlanInstructionDataArgs["interval"];
   gracePeriod: CreatePlanInstructionDataArgs["gracePeriod"];
 };

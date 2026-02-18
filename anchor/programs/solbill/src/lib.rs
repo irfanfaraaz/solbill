@@ -25,16 +25,18 @@ pub mod solbill {
         ctx: Context<CreatePlan>,
         name: String,
         amount: u64,
+        crank_reward: u64,
         interval: i64,
         grace_period: i64,
     ) -> Result<()> {
-        instructions::create_plan::handler(ctx, name, amount, interval, grace_period)
+        instructions::create_plan::handler(ctx, name, amount, crank_reward, interval, grace_period)
     }
 
     /// Merchant: Update a plan's fields (does not affect existing subscriptions).
     pub fn update_plan(
         ctx: Context<UpdatePlan>,
         new_amount: Option<u64>,
+        new_cranker_reward: Option<u64>,
         new_interval: Option<i64>,
         new_is_active: Option<bool>,
         new_grace_period: Option<i64>,
@@ -42,6 +44,7 @@ pub mod solbill {
         instructions::update_plan::handler(
             ctx,
             new_amount,
+            new_cranker_reward,
             new_interval,
             new_is_active,
             new_grace_period,

@@ -84,6 +84,7 @@ export type UpdatePlanInstruction<
 export type UpdatePlanInstructionData = {
   discriminator: ReadonlyUint8Array;
   newAmount: Option<bigint>;
+  newCrankerReward: Option<bigint>;
   newInterval: Option<bigint>;
   newIsActive: Option<boolean>;
   newGracePeriod: Option<bigint>;
@@ -91,6 +92,7 @@ export type UpdatePlanInstructionData = {
 
 export type UpdatePlanInstructionDataArgs = {
   newAmount: OptionOrNullable<number | bigint>;
+  newCrankerReward: OptionOrNullable<number | bigint>;
   newInterval: OptionOrNullable<number | bigint>;
   newIsActive: OptionOrNullable<boolean>;
   newGracePeriod: OptionOrNullable<number | bigint>;
@@ -101,6 +103,7 @@ export function getUpdatePlanInstructionDataEncoder(): Encoder<UpdatePlanInstruc
     getStructEncoder([
       ["discriminator", fixEncoderSize(getBytesEncoder(), 8)],
       ["newAmount", getOptionEncoder(getU64Encoder())],
+      ["newCrankerReward", getOptionEncoder(getU64Encoder())],
       ["newInterval", getOptionEncoder(getI64Encoder())],
       ["newIsActive", getOptionEncoder(getBooleanEncoder())],
       ["newGracePeriod", getOptionEncoder(getI64Encoder())],
@@ -113,6 +116,7 @@ export function getUpdatePlanInstructionDataDecoder(): Decoder<UpdatePlanInstruc
   return getStructDecoder([
     ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
     ["newAmount", getOptionDecoder(getU64Decoder())],
+    ["newCrankerReward", getOptionDecoder(getU64Decoder())],
     ["newInterval", getOptionDecoder(getI64Decoder())],
     ["newIsActive", getOptionDecoder(getBooleanDecoder())],
     ["newGracePeriod", getOptionDecoder(getI64Decoder())],
@@ -138,6 +142,7 @@ export type UpdatePlanAsyncInput<
   service?: Address<TAccountService>;
   plan: Address<TAccountPlan>;
   newAmount: UpdatePlanInstructionDataArgs["newAmount"];
+  newCrankerReward: UpdatePlanInstructionDataArgs["newCrankerReward"];
   newInterval: UpdatePlanInstructionDataArgs["newInterval"];
   newIsActive: UpdatePlanInstructionDataArgs["newIsActive"];
   newGracePeriod: UpdatePlanInstructionDataArgs["newGracePeriod"];
@@ -217,6 +222,7 @@ export type UpdatePlanInput<
   service: Address<TAccountService>;
   plan: Address<TAccountPlan>;
   newAmount: UpdatePlanInstructionDataArgs["newAmount"];
+  newCrankerReward: UpdatePlanInstructionDataArgs["newCrankerReward"];
   newInterval: UpdatePlanInstructionDataArgs["newInterval"];
   newIsActive: UpdatePlanInstructionDataArgs["newIsActive"];
   newGracePeriod: UpdatePlanInstructionDataArgs["newGracePeriod"];

@@ -36,12 +36,15 @@ export const SOLBILL_ERROR__INVALID_AMOUNT = 0x1778; // 6008
 export const SOLBILL_ERROR__INVALID_INTERVAL = 0x1779; // 6009
 /** NotPastDue: Subscription is not past due */
 export const SOLBILL_ERROR__NOT_PAST_DUE = 0x177a; // 6010
+/** InvalidCrankReward: Invalid crank reward — must be less than plan amount */
+export const SOLBILL_ERROR__INVALID_CRANK_REWARD = 0x177b; // 6011
 
 export type SolbillError =
   | typeof SOLBILL_ERROR__ALREADY_CANCELLED
   | typeof SOLBILL_ERROR__BILLING_NOT_DUE
   | typeof SOLBILL_ERROR__GRACE_PERIOD_NOT_ELAPSED
   | typeof SOLBILL_ERROR__INVALID_AMOUNT
+  | typeof SOLBILL_ERROR__INVALID_CRANK_REWARD
   | typeof SOLBILL_ERROR__INVALID_INTERVAL
   | typeof SOLBILL_ERROR__INVALID_PLAN_NAME
   | typeof SOLBILL_ERROR__NOT_PAST_DUE
@@ -57,6 +60,7 @@ if (process.env.NODE_ENV !== "production") {
     [SOLBILL_ERROR__BILLING_NOT_DUE]: `Billing is not yet due`,
     [SOLBILL_ERROR__GRACE_PERIOD_NOT_ELAPSED]: `Grace period has not elapsed`,
     [SOLBILL_ERROR__INVALID_AMOUNT]: `Invalid amount — must be greater than zero`,
+    [SOLBILL_ERROR__INVALID_CRANK_REWARD]: `Invalid crank reward — must be less than plan amount`,
     [SOLBILL_ERROR__INVALID_INTERVAL]: `Invalid interval — must be greater than zero`,
     [SOLBILL_ERROR__INVALID_PLAN_NAME]: `Invalid plan name — must be non-empty and at most 32 bytes`,
     [SOLBILL_ERROR__NOT_PAST_DUE]: `Subscription is not past due`,

@@ -58,6 +58,7 @@ export type CreateSubscriptionInstruction<
   TAccountSubscriberTokenAccount extends string | AccountMeta<string> = string,
   TAccountAcceptedMint extends string | AccountMeta<string> = string,
   TAccountDelegate extends string | AccountMeta<string> = string,
+  TAccountTreasury extends string | AccountMeta<string> = string,
   TAccountTokenProgram extends string | AccountMeta<string> =
     "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   TAccountSystemProgram extends string | AccountMeta<string> =
@@ -89,6 +90,9 @@ export type CreateSubscriptionInstruction<
       TAccountDelegate extends string
         ? ReadonlyAccount<TAccountDelegate>
         : TAccountDelegate,
+      TAccountTreasury extends string
+        ? WritableAccount<TAccountTreasury>
+        : TAccountTreasury,
       TAccountTokenProgram extends string
         ? ReadonlyAccount<TAccountTokenProgram>
         : TAccountTokenProgram,
@@ -136,6 +140,7 @@ export type CreateSubscriptionAsyncInput<
   TAccountSubscriberTokenAccount extends string = string,
   TAccountAcceptedMint extends string = string,
   TAccountDelegate extends string = string,
+  TAccountTreasury extends string = string,
   TAccountTokenProgram extends string = string,
   TAccountSystemProgram extends string = string,
 > = {
@@ -149,6 +154,8 @@ export type CreateSubscriptionAsyncInput<
   acceptedMint: Address<TAccountAcceptedMint>;
   /** The subscription PDA will be the delegate. */
   delegate?: Address<TAccountDelegate>;
+  /** The merchant's treasury token account (destination for first payment). */
+  treasury: Address<TAccountTreasury>;
   tokenProgram?: Address<TAccountTokenProgram>;
   systemProgram?: Address<TAccountSystemProgram>;
 };
@@ -161,6 +168,7 @@ export async function getCreateSubscriptionInstructionAsync<
   TAccountSubscriberTokenAccount extends string,
   TAccountAcceptedMint extends string,
   TAccountDelegate extends string,
+  TAccountTreasury extends string,
   TAccountTokenProgram extends string,
   TAccountSystemProgram extends string,
   TProgramAddress extends Address = typeof SOLBILL_PROGRAM_ADDRESS,
@@ -173,6 +181,7 @@ export async function getCreateSubscriptionInstructionAsync<
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
     TAccountDelegate,
+    TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
   >,
@@ -187,6 +196,7 @@ export async function getCreateSubscriptionInstructionAsync<
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
     TAccountDelegate,
+    TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
   >
@@ -206,6 +216,7 @@ export async function getCreateSubscriptionInstructionAsync<
     },
     acceptedMint: { value: input.acceptedMint ?? null, isWritable: false },
     delegate: { value: input.delegate ?? null, isWritable: false },
+    treasury: { value: input.treasury ?? null, isWritable: true },
     tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
     systemProgram: { value: input.systemProgram ?? null, isWritable: false },
   };
@@ -262,6 +273,7 @@ export async function getCreateSubscriptionInstructionAsync<
       getAccountMeta(accounts.subscriberTokenAccount),
       getAccountMeta(accounts.acceptedMint),
       getAccountMeta(accounts.delegate),
+      getAccountMeta(accounts.treasury),
       getAccountMeta(accounts.tokenProgram),
       getAccountMeta(accounts.systemProgram),
     ],
@@ -276,6 +288,7 @@ export async function getCreateSubscriptionInstructionAsync<
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
     TAccountDelegate,
+    TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
   >);
@@ -289,6 +302,7 @@ export type CreateSubscriptionInput<
   TAccountSubscriberTokenAccount extends string = string,
   TAccountAcceptedMint extends string = string,
   TAccountDelegate extends string = string,
+  TAccountTreasury extends string = string,
   TAccountTokenProgram extends string = string,
   TAccountSystemProgram extends string = string,
 > = {
@@ -302,6 +316,8 @@ export type CreateSubscriptionInput<
   acceptedMint: Address<TAccountAcceptedMint>;
   /** The subscription PDA will be the delegate. */
   delegate: Address<TAccountDelegate>;
+  /** The merchant's treasury token account (destination for first payment). */
+  treasury: Address<TAccountTreasury>;
   tokenProgram?: Address<TAccountTokenProgram>;
   systemProgram?: Address<TAccountSystemProgram>;
 };
@@ -314,6 +330,7 @@ export function getCreateSubscriptionInstruction<
   TAccountSubscriberTokenAccount extends string,
   TAccountAcceptedMint extends string,
   TAccountDelegate extends string,
+  TAccountTreasury extends string,
   TAccountTokenProgram extends string,
   TAccountSystemProgram extends string,
   TProgramAddress extends Address = typeof SOLBILL_PROGRAM_ADDRESS,
@@ -326,6 +343,7 @@ export function getCreateSubscriptionInstruction<
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
     TAccountDelegate,
+    TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
   >,
@@ -339,6 +357,7 @@ export function getCreateSubscriptionInstruction<
   TAccountSubscriberTokenAccount,
   TAccountAcceptedMint,
   TAccountDelegate,
+  TAccountTreasury,
   TAccountTokenProgram,
   TAccountSystemProgram
 > {
@@ -357,6 +376,7 @@ export function getCreateSubscriptionInstruction<
     },
     acceptedMint: { value: input.acceptedMint ?? null, isWritable: false },
     delegate: { value: input.delegate ?? null, isWritable: false },
+    treasury: { value: input.treasury ?? null, isWritable: true },
     tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
     systemProgram: { value: input.systemProgram ?? null, isWritable: false },
   };
@@ -385,6 +405,7 @@ export function getCreateSubscriptionInstruction<
       getAccountMeta(accounts.subscriberTokenAccount),
       getAccountMeta(accounts.acceptedMint),
       getAccountMeta(accounts.delegate),
+      getAccountMeta(accounts.treasury),
       getAccountMeta(accounts.tokenProgram),
       getAccountMeta(accounts.systemProgram),
     ],
@@ -399,6 +420,7 @@ export function getCreateSubscriptionInstruction<
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
     TAccountDelegate,
+    TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
   >);
@@ -420,8 +442,10 @@ export type ParsedCreateSubscriptionInstruction<
     acceptedMint: TAccountMetas[5];
     /** The subscription PDA will be the delegate. */
     delegate: TAccountMetas[6];
-    tokenProgram: TAccountMetas[7];
-    systemProgram: TAccountMetas[8];
+    /** The merchant's treasury token account (destination for first payment). */
+    treasury: TAccountMetas[7];
+    tokenProgram: TAccountMetas[8];
+    systemProgram: TAccountMetas[9];
   };
   data: CreateSubscriptionInstructionData;
 };
@@ -434,7 +458,7 @@ export function parseCreateSubscriptionInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedCreateSubscriptionInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 9) {
+  if (instruction.accounts.length < 10) {
     // TODO: Coded error.
     throw new Error("Not enough accounts");
   }
@@ -454,6 +478,7 @@ export function parseCreateSubscriptionInstruction<
       subscriberTokenAccount: getNextAccount(),
       acceptedMint: getNextAccount(),
       delegate: getNextAccount(),
+      treasury: getNextAccount(),
       tokenProgram: getNextAccount(),
       systemProgram: getNextAccount(),
     },

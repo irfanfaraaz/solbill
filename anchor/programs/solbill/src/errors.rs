@@ -24,4 +24,6 @@ pub enum SolBillError {
     InvalidInterval,
     #[msg("Subscription is not past due")]
     NotPastDue,
+    #[msg("Invalid crank reward — must be less than plan amount")]
+    InvalidCrankReward,
 }

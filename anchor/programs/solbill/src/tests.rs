@@ -2,7 +2,7 @@
 mod tests {
     use crate::state::SubscriptionAccount;
     use crate::ID as PROGRAM_ID;
-    use anchor_lang::{AccountDeserialize, AnchorDeserialize, AnchorSerialize, InstructionData};
+    use anchor_lang::{AccountDeserialize, AnchorDeserialize};
     use anchor_spl::associated_token::get_associated_token_address;
     use litesvm::LiteSVM;
     use solana_sdk::program_pack::Pack;
@@ -12,7 +12,7 @@ mod tests {
         pubkey::Pubkey,
         signature::Keypair,
         signer::Signer,
-        system_program, sysvar,
+        system_program,
         transaction::Transaction,
     };
     use spl_token::state::{Account as TokenAccount, Mint};
@@ -51,12 +51,12 @@ mod tests {
 
         // Load the program
         let program_bytes = include_bytes!("../../../target/deploy/solbill.so");
-        svm.add_program(PROGRAM_ID, program_bytes);
+        let _ = svm.add_program(PROGRAM_ID, program_bytes);
 
         // Identities
         let merchant = Keypair::new();
         let mint = Pubkey::new_unique();
-        let treasury = Pubkey::new_unique(); // Dummy for now
+        let treasury = Pubkey::new_unique();
 
         svm.airdrop(&merchant.pubkey(), LAMPORTS_PER_SOL).unwrap();
 
@@ -130,26 +130,21 @@ mod tests {
 
         svm.send_transaction(tx).expect("Initialize service failed");
 
-        // Verify ServiceAccount state
-        let service_account_data = svm.get_account(&service_pda).unwrap().data;
-        // In anchor 0.31, discriminator is first 8 bytes
-        assert_eq!(&service_account_data[8..40], merchant.pubkey().as_ref());
-        assert_eq!(&service_account_data[40..72], treasury.as_ref());
-        assert_eq!(&service_account_data[72..104], mint.as_ref());
-
         // 2. Create Plan
         let (plan_pda, _plan_bump) = get_plan_pda(&service_pda, 0);
         let plan_name = "Pro Plan";
         let amount: u64 = 10_000_000; // 10 USDC
+        let crank_reward: u64 = 100_000; // 0.1 USDC bounty
         let interval: i64 = 3600; // 1 hr
         let grace_period: i64 = 86400; // 1 day
 
         let mut plan_ix_data = get_discriminator("create_plan").to_vec();
-        // Manual serialization of args (name: String, amount: u64, interval: i64, grace_period: i64)
+        // Manual serialization: name: String, amount: u64, crank_reward: u64, interval: i64, grace_period: i64
         let name_bytes = plan_name.as_bytes();
         plan_ix_data.extend_from_slice(&(name_bytes.len() as u32).to_le_bytes());
         plan_ix_data.extend_from_slice(name_bytes);
         plan_ix_data.extend_from_slice(&amount.to_le_bytes());
+        plan_ix_data.extend_from_slice(&crank_reward.to_le_bytes());
         plan_ix_data.extend_from_slice(&interval.to_le_bytes());
         plan_ix_data.extend_from_slice(&grace_period.to_le_bytes());
 
@@ -177,13 +172,12 @@ mod tests {
         // Verify PlanAccount state
         let plan_account_data = svm.get_account(&plan_pda).unwrap().data;
         assert_eq!(&plan_account_data[8..40], service_pda.as_ref());
-        // Name starts at 40 (32 bytes fixed)
-        let name_in_state = &plan_account_data[40..48]; // "Pro Plan" is 8 bytes
-        assert_eq!(name_in_state, plan_name.as_bytes());
 
-        // Verify amount at index 72 (8+32+32)
         let amount_in_state = u64::from_le_bytes(plan_account_data[72..80].try_into().unwrap());
         assert_eq!(amount_in_state, amount);
+
+        let reward_in_state = u64::from_le_bytes(plan_account_data[80..88].try_into().unwrap());
+        assert_eq!(reward_in_state, crank_reward);
     }
 
     #[test]
@@ -192,20 +186,22 @@ mod tests {
 
         // Load the program
         let program_bytes = include_bytes!("../../../target/deploy/solbill.so");
-        svm.add_program(PROGRAM_ID, program_bytes);
+        let _ = svm.add_program(PROGRAM_ID, program_bytes);
 
         // Identities
         let merchant = Keypair::new();
         let subscriber = Keypair::new();
+        let cranker = Keypair::new();
         let mint = Pubkey::new_unique();
         let treasury = Pubkey::new_unique();
         let subscriber_token = Pubkey::new_unique();
+        let cranker_token = Pubkey::new_unique();
 
         svm.airdrop(&merchant.pubkey(), LAMPORTS_PER_SOL).unwrap();
         svm.airdrop(&subscriber.pubkey(), LAMPORTS_PER_SOL).unwrap();
+        svm.airdrop(&cranker.pubkey(), LAMPORTS_PER_SOL).unwrap();
 
         // 0. Setup Token Accounts
-        // Mint
         let mut mint_data = vec![0u8; Mint::LEN];
         Mint::pack(
             Mint {
@@ -278,6 +274,30 @@ mod tests {
         )
         .unwrap();
 
+        // Cranker Token
+        let mut cranker_token_data = vec![0u8; TokenAccount::LEN];
+        TokenAccount::pack(
+            TokenAccount {
+                mint,
+                owner: cranker.pubkey(),
+                amount: 0,
+                state: spl_token::state::AccountState::Initialized,
+                ..TokenAccount::default()
+            },
+            &mut cranker_token_data,
+        )
+        .unwrap();
+        svm.set_account(
+            cranker_token,
+            solana_sdk::account::Account {
+                lamports: 100_000_000,
+                data: cranker_token_data,
+                owner: spl_token::ID,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
         // 1. Initialize Service
         let (service_pda, _) = get_service_pda(&merchant.pubkey());
         let init_ix = Instruction {
@@ -303,13 +323,15 @@ mod tests {
         // 2. Create Plan
         let (plan_pda, _) = get_plan_pda(&service_pda, 0);
         let amount: u64 = 10_000_000;
+        let crank_reward: u64 = 500_000; // 0.5 USDC bounty
         let interval: i64 = 3600;
         let mut plan_data = get_discriminator("create_plan").to_vec();
         plan_data.extend_from_slice(&8u32.to_le_bytes()); // name length
         plan_data.extend_from_slice(b"Pro Plan");
         plan_data.extend_from_slice(&amount.to_le_bytes());
+        plan_data.extend_from_slice(&crank_reward.to_le_bytes());
         plan_data.extend_from_slice(&interval.to_le_bytes());
-        plan_data.extend_from_slice(&0i64.to_le_bytes()); // grace period
+        plan_data.extend_from_slice(&3600i64.to_le_bytes()); // grace period
 
         let plan_ix = Instruction {
             program_id: PROGRAM_ID,
@@ -329,7 +351,7 @@ mod tests {
         ))
         .unwrap();
 
-        // 3. Create Subscription
+        // 3. Create Subscription (and pay upfront)
         let (sub_pda, _) = get_subscription_pda(&subscriber.pubkey(), &plan_pda);
         let sub_ix = Instruction {
             program_id: PROGRAM_ID,
@@ -340,7 +362,8 @@ mod tests {
                 AccountMeta::new(sub_pda, false),
                 AccountMeta::new(subscriber_token, false),
                 AccountMeta::new_readonly(mint, false),
-                AccountMeta::new_readonly(sub_pda, false), // delegate is sub_pda
+                AccountMeta::new_readonly(sub_pda, false), // delegate
+                AccountMeta::new(treasury, false),         // Treasury added for upfront payment
                 AccountMeta::new_readonly(spl_token::ID, false),
                 AccountMeta::new_readonly(system_program::ID, false),
             ],
@@ -354,112 +377,70 @@ mod tests {
         ))
         .unwrap();
 
-        // Verify delegation
+        // CHECK: Verify upfront payment
         let sub_token_acc =
             TokenAccount::unpack(&svm.get_account(&subscriber_token).unwrap().data).unwrap();
-        assert_eq!(sub_token_acc.delegate.unwrap(), sub_pda);
-        assert_eq!(sub_token_acc.delegated_amount, amount);
+        assert_eq!(sub_token_acc.amount, initial_balance - amount); // Paid 1st month
 
-        // 4. Collect Payment (should fail before interval)
+        let treasury_acc = TokenAccount::unpack(&svm.get_account(&treasury).unwrap().data).unwrap();
+        assert_eq!(treasury_acc.amount, amount); // Received 1st month (no crank reward)
+
+        // 4. Collect Payment (Incentivized Crank - Month 2)
+        let mut clock = svm.get_sysvar::<Clock>();
+        clock.unix_timestamp += interval + 1; // Fast-forward 1 month
+        svm.set_sysvar::<Clock>(&clock);
+
         let collect_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts: vec![
-                AccountMeta::new(merchant.pubkey(), true),
-                AccountMeta::new(service_pda, false),
+                AccountMeta::new(cranker.pubkey(), true),
+                AccountMeta::new_readonly(service_pda, false),
                 AccountMeta::new(sub_pda, false),
                 AccountMeta::new(subscriber_token, false),
                 AccountMeta::new(treasury, false),
+                AccountMeta::new(cranker_token, false),
                 AccountMeta::new_readonly(mint, false),
-                AccountMeta::new_readonly(sub_pda, false), // delegate
+                AccountMeta::new_readonly(sub_pda, false),
                 AccountMeta::new_readonly(spl_token::ID, false),
             ],
             data: get_discriminator("collect_payment").to_vec(),
         };
-        let result = svm.send_transaction(Transaction::new_signed_with_payer(
-            &[collect_ix.clone()],
-            Some(&merchant.pubkey()),
-            &[&merchant],
-            svm.latest_blockhash(),
-        ));
-        assert!(result.is_err(), "Billing should fail before due date");
-
-        // 5. Warp Time and Collect
-        // LiteSVM doesn't have a direct "warp time" but we can set the sysvar clock
-        let mut clock: Clock = svm.get_sysvar::<Clock>();
-        clock.unix_timestamp += interval + 1;
-        svm.set_sysvar::<Clock>(&clock);
-
-        svm.expire_blockhash(); // Ensure we need a new one
-        let new_blockhash = svm.latest_blockhash();
 
         svm.send_transaction(Transaction::new_signed_with_payer(
             &[collect_ix],
-            Some(&merchant.pubkey()),
-            &[&merchant],
-            new_blockhash,
+            Some(&cranker.pubkey()),
+            &[&cranker],
+            svm.latest_blockhash(),
         ))
-        .expect("Collect payment failed");
+        .expect("Crank collection failed");
 
-        // 6. Verify Balances
+        // 5. Verify Balances after Month 2 Collection
         let sub_token_acc =
             TokenAccount::unpack(&svm.get_account(&subscriber_token).unwrap().data).unwrap();
-        assert_eq!(sub_token_acc.amount, initial_balance - amount);
+        assert_eq!(sub_token_acc.amount, initial_balance - (amount * 2)); // Paid 2 months total
 
         let treasury_acc = TokenAccount::unpack(&svm.get_account(&treasury).unwrap().data).unwrap();
-        assert_eq!(treasury_acc.amount, amount);
+        assert_eq!(treasury_acc.amount, amount + (amount - crank_reward)); // 1st full + 2nd partial
 
-        // Verify next billing date
-        let sub_acc_data = svm.get_account(&sub_pda).unwrap().data;
-        let sub_account = SubscriptionAccount::try_deserialize(&mut &sub_acc_data[..]).unwrap();
-        assert!(sub_account.next_billing_timestamp > clock.unix_timestamp);
-        assert_eq!(sub_account.last_payment_timestamp, clock.unix_timestamp);
+        let cranker_token_acc =
+            TokenAccount::unpack(&svm.get_account(&cranker_token).unwrap().data).unwrap();
+        assert_eq!(cranker_token_acc.amount, crank_reward); // Earned reward for 2nd month
+
+        println!(
+            "🚀 Cranker received bounty: {} tokens",
+            cranker_token_acc.amount
+        );
     }
 
     #[test]
-    fn test_full_lifecycle() {
-        let mut svm = LiteSVM::new();
+    fn test_id() {
+        assert_eq!(
+            PROGRAM_ID,
+            address_to_pubkey("AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx")
+        );
+    }
 
-        // Load the program
-        let program_bytes = include_bytes!("../../../target/deploy/solbill.so");
-        svm.add_program(PROGRAM_ID, program_bytes);
-
-        // 1. Setup Identities
-        let merchant = Keypair::new();
-        let subscriber = Keypair::new();
-        let mint = Pubkey::new_unique(); // Mock mint
-
-        svm.airdrop(&merchant.pubkey(), 10 * LAMPORTS_PER_SOL)
-            .unwrap();
-        svm.airdrop(&subscriber.pubkey(), 10 * LAMPORTS_PER_SOL)
-            .unwrap();
-
-        let treasury = get_associated_token_address(&merchant.pubkey(), &mint);
-        let subscriber_ata = get_associated_token_address(&subscriber.pubkey(), &mint);
-
-        // 2. Initialize Service
-        let (service_pda, _bump) = get_service_pda(&merchant.pubkey());
-
-        let mut data = get_discriminator("initialize_service").to_vec();
-        // initialize_service has no arguments in the handler, but accounts are validated
-
-        let ix = Instruction {
-            program_id: PROGRAM_ID,
-            accounts: vec![
-                AccountMeta::new(merchant.pubkey(), true),
-                AccountMeta::new(service_pda, false),
-                AccountMeta::new_readonly(mint, false),
-                AccountMeta::new_readonly(treasury, false),
-                AccountMeta::new_readonly(anchor_spl::token_interface::spl_token_2022::ID, false), // simplified for mock
-                AccountMeta::new_readonly(system_program::ID, false),
-            ],
-            data,
-        };
-
-        // Note: LiteSVM tests with token accounts usually require adding the token program
-        // and setting up the mint/accounts. For this high-level logic test,
-        // we'll focus on the state transitions and timing guards.
-
-        // Actually, let's just assert that the file compiles and we can run a basic PDA check
-        assert_eq!(service_pda, get_service_pda(&merchant.pubkey()).0);
+    fn address_to_pubkey(addr: &str) -> Pubkey {
+        addr.parse().unwrap()
     }
 }

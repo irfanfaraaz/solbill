@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::SolBillError;
+use crate::errors::SolscribeError;
 use crate::state::{PlanAccount, ServiceAccount};
 
 #[derive(Accounts)]
@@ -10,7 +10,7 @@ pub struct UpdatePlan<'info> {
     #[account(
         seeds = [b"service", authority.key().as_ref()],
         bump = service.bump,
-        has_one = authority @ SolBillError::UnauthorizedAuthority,
+        has_one = authority @ SolscribeError::UnauthorizedAuthority,
     )]
     pub service: Account<'info, ServiceAccount>,
 
@@ -26,6 +26,7 @@ pub struct UpdatePlan<'info> {
 pub fn handler(
     ctx: Context<UpdatePlan>,
     new_amount: Option<u64>,
+    new_cranker_reward: Option<u64>,
     new_interval: Option<i64>,
     new_is_active: Option<bool>,
     new_grace_period: Option<i64>,
@@ -33,11 +34,18 @@ pub fn handler(
     let plan = &mut ctx.accounts.plan;
 
     if let Some(amount) = new_amount {
-        require!(amount > 0, SolBillError::InvalidAmount);
+        require!(amount > 0, SolscribeError::InvalidAmount);
         plan.amount = amount;
     }
+    if let Some(cranker_reward) = new_cranker_reward {
+        require!(
+            cranker_reward < plan.amount,
+            SolscribeError::InvalidCrankReward
+        );
+        plan.crank_reward = cranker_reward;
+    }
     if let Some(interval) = new_interval {
-        require!(interval > 0, SolBillError::InvalidInterval);
+        require!(interval > 0, SolscribeError::InvalidInterval);
         plan.interval = interval;
     }
     if let Some(is_active) = new_is_active {
@@ -48,9 +56,10 @@ pub fn handler(
     }
 
     msg!(
-        "Plan {} updated — amount: {}, interval: {}s, active: {}",
+        "Plan {} updated — amount: {}, reward: {}, interval: {}s, active: {}",
         plan.plan_index,
         plan.amount,
+        plan.crank_reward,
         plan.interval,
         plan.is_active,
     );

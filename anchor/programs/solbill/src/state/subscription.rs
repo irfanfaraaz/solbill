@@ -9,8 +9,9 @@ pub enum SubscriptionStatus {
     Expired,
 }
 
-/// Size: 8 (discriminator) + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 (enum) + 4 + 1 = 182
-pub const SUBSCRIPTION_ACCOUNT_SIZE: usize = 8 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 4 + 1;
+/// Size: 8 (discriminator) + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1 (enum) + 4 + 1 = 190
+pub const SUBSCRIPTION_ACCOUNT_SIZE: usize =
+    8 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 8 + 1 + 4 + 1;
 
 #[account]
 pub struct SubscriptionAccount {
@@ -24,6 +25,8 @@ pub struct SubscriptionAccount {
     pub subscriber_token_account: Pubkey,
     /// Locked-in payment amount (copied from Plan at creation).
     pub amount: u64,
+    /// Reward paid to the cranker (copied from Plan at creation).
+    pub crank_reward: u64,
     /// Locked-in billing interval in seconds (copied from Plan at creation).
     pub interval: i64,
     /// Unix timestamp when the next payment is due.

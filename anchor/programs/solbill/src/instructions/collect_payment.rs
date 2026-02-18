@@ -3,18 +3,18 @@ use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
-use crate::errors::SolBillError;
+use crate::errors::SolscribeError;
 use crate::state::{ServiceAccount, SubscriptionAccount, SubscriptionStatus};
 
 #[derive(Accounts)]
 pub struct CollectPayment<'info> {
-    /// The merchant (or their worker) who triggers billing.
-    pub authority: Signer<'info>,
+    /// The public crank turner who triggers the payment and receives the reward.
+    #[account(mut)]
+    pub cranker: Signer<'info>,
 
     #[account(
-        seeds = [b"service", authority.key().as_ref()],
+        seeds = [b"service", service.authority.as_ref()],
         bump = service.bump,
-        has_one = authority @ SolBillError::UnauthorizedAuthority,
     )]
     pub service: Account<'info, ServiceAccount>,
 
@@ -33,12 +33,19 @@ pub struct CollectPayment<'info> {
     )]
     pub subscriber_token_account: InterfaceAccount<'info, TokenAccount>,
 
-    /// The merchant's treasury token account (destination).
+    /// The merchant's treasury token account (destination for main payment).
     #[account(
         mut,
         address = service.treasury,
     )]
     pub treasury: InterfaceAccount<'info, TokenAccount>,
+
+    /// The cranker's token account (destination for bounty/reward).
+    #[account(
+        mut,
+        token::mint = accepted_mint,
+    )]
+    pub cranker_token_account: InterfaceAccount<'info, TokenAccount>,
 
     /// The accepted SPL token mint.
     #[account(
@@ -66,16 +73,16 @@ pub fn handler(ctx: Context<CollectPayment>) -> Result<()> {
     require!(
         subscription.status == SubscriptionStatus::Active
             || subscription.status == SubscriptionStatus::PastDue,
-        SolBillError::SubscriptionNotActive,
+        SolscribeError::SubscriptionNotActive,
     );
 
     // Timing enforcement: cannot bill before due date
     require!(
         clock.unix_timestamp >= subscription.next_billing_timestamp,
-        SolBillError::BillingNotDue,
+        SolscribeError::BillingNotDue,
     );
 
-    // --- Transfer via delegate PDA ---
+    // --- Transfer Logic ---
     let subscriber_key = subscription.subscriber;
     let plan_key = subscription.plan;
     let bump = subscription.bump;
@@ -86,19 +93,16 @@ pub fn handler(ctx: Context<CollectPayment>) -> Result<()> {
         &[bump],
     ]];
 
-    transfer_checked(
-        CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            TransferChecked {
-                from: ctx.accounts.subscriber_token_account.to_account_info(),
-                to: ctx.accounts.treasury.to_account_info(),
-                authority: ctx.accounts.delegate.to_account_info(),
-                mint: ctx.accounts.accepted_mint.to_account_info(),
-            },
-            signer_seeds,
-        ),
+    crate::instructions::utils::execute_token_transfer(
+        &ctx.accounts.token_program,
+        &ctx.accounts.subscriber_token_account,
+        &ctx.accounts.treasury,
+        Some(&ctx.accounts.cranker_token_account),
+        &ctx.accounts.accepted_mint,
+        &ctx.accounts.delegate,
         subscription.amount,
-        ctx.accounts.accepted_mint.decimals,
+        subscription.crank_reward,
+        Some(signer_seeds),
     )?;
 
     // --- Update subscription state ---
@@ -106,18 +110,22 @@ pub fn handler(ctx: Context<CollectPayment>) -> Result<()> {
     subscription.next_billing_timestamp = clock
         .unix_timestamp
         .checked_add(subscription.interval)
-        .ok_or(SolBillError::Overflow)?;
+        .ok_or(SolscribeError::Overflow)?;
     subscription.payments_made = subscription
         .payments_made
         .checked_add(1)
-        .ok_or(SolBillError::Overflow)?;
+        .ok_or(SolscribeError::Overflow)?;
     subscription.status = SubscriptionStatus::Active;
 
+    let treasury_amount = subscription
+        .amount
+        .checked_sub(subscription.crank_reward)
+        .unwrap_or(0);
+
     msg!(
-        "Payment collected: {} tokens from {} (payment #{}, next billing: {})",
-        subscription.amount,
-        subscription.subscriber,
-        subscription.payments_made,
+        "Collection success: Cranker Reward: {}, Treasury: {}, Next billing: {}",
+        subscription.crank_reward,
+        treasury_amount,
         subscription.next_billing_timestamp,
     );
     Ok(())

@@ -10,10 +10,8 @@ import {
   combineCodec,
   fixDecoderSize,
   fixEncoderSize,
-  getAddressEncoder,
   getBytesDecoder,
   getBytesEncoder,
-  getProgramDerivedAddress,
   getStructDecoder,
   getStructEncoder,
   transformEncoder,
@@ -27,17 +25,13 @@ import {
   type InstructionWithAccounts,
   type InstructionWithData,
   type ReadonlyAccount,
-  type ReadonlySignerAccount,
   type ReadonlyUint8Array,
   type TransactionSigner,
   type WritableAccount,
+  type WritableSignerAccount,
 } from "@solana/kit";
 import { SOLBILL_PROGRAM_ADDRESS } from "../programs";
-import {
-  expectAddress,
-  getAccountMetaFactory,
-  type ResolvedAccount,
-} from "../shared";
+import { getAccountMetaFactory, type ResolvedAccount } from "../shared";
 
 export const COLLECT_PAYMENT_DISCRIMINATOR = new Uint8Array([
   180, 221, 16, 160, 45, 216, 91, 97,
@@ -51,11 +45,12 @@ export function getCollectPaymentDiscriminatorBytes() {
 
 export type CollectPaymentInstruction<
   TProgram extends string = typeof SOLBILL_PROGRAM_ADDRESS,
-  TAccountAuthority extends string | AccountMeta<string> = string,
+  TAccountCranker extends string | AccountMeta<string> = string,
   TAccountService extends string | AccountMeta<string> = string,
   TAccountSubscription extends string | AccountMeta<string> = string,
   TAccountSubscriberTokenAccount extends string | AccountMeta<string> = string,
   TAccountTreasury extends string | AccountMeta<string> = string,
+  TAccountCrankerTokenAccount extends string | AccountMeta<string> = string,
   TAccountAcceptedMint extends string | AccountMeta<string> = string,
   TAccountDelegate extends string | AccountMeta<string> = string,
   TAccountTokenProgram extends string | AccountMeta<string> =
@@ -65,10 +60,10 @@ export type CollectPaymentInstruction<
   InstructionWithData<ReadonlyUint8Array> &
   InstructionWithAccounts<
     [
-      TAccountAuthority extends string
-        ? ReadonlySignerAccount<TAccountAuthority> &
-            AccountSignerMeta<TAccountAuthority>
-        : TAccountAuthority,
+      TAccountCranker extends string
+        ? WritableSignerAccount<TAccountCranker> &
+            AccountSignerMeta<TAccountCranker>
+        : TAccountCranker,
       TAccountService extends string
         ? ReadonlyAccount<TAccountService>
         : TAccountService,
@@ -81,6 +76,9 @@ export type CollectPaymentInstruction<
       TAccountTreasury extends string
         ? WritableAccount<TAccountTreasury>
         : TAccountTreasury,
+      TAccountCrankerTokenAccount extends string
+        ? WritableAccount<TAccountCrankerTokenAccount>
+        : TAccountCrankerTokenAccount,
       TAccountAcceptedMint extends string
         ? ReadonlyAccount<TAccountAcceptedMint>
         : TAccountAcceptedMint,
@@ -123,149 +121,27 @@ export function getCollectPaymentInstructionDataCodec(): FixedSizeCodec<
   );
 }
 
-export type CollectPaymentAsyncInput<
-  TAccountAuthority extends string = string,
-  TAccountService extends string = string,
-  TAccountSubscription extends string = string,
-  TAccountSubscriberTokenAccount extends string = string,
-  TAccountTreasury extends string = string,
-  TAccountAcceptedMint extends string = string,
-  TAccountDelegate extends string = string,
-  TAccountTokenProgram extends string = string,
-> = {
-  /** The merchant (or their worker) who triggers billing. */
-  authority: TransactionSigner<TAccountAuthority>;
-  service?: Address<TAccountService>;
-  subscription: Address<TAccountSubscription>;
-  /** The subscriber's token account (source of funds). */
-  subscriberTokenAccount: Address<TAccountSubscriberTokenAccount>;
-  /** The merchant's treasury token account (destination). */
-  treasury: Address<TAccountTreasury>;
-  /** The accepted SPL token mint. */
-  acceptedMint: Address<TAccountAcceptedMint>;
-  delegate: Address<TAccountDelegate>;
-  tokenProgram?: Address<TAccountTokenProgram>;
-};
-
-export async function getCollectPaymentInstructionAsync<
-  TAccountAuthority extends string,
-  TAccountService extends string,
-  TAccountSubscription extends string,
-  TAccountSubscriberTokenAccount extends string,
-  TAccountTreasury extends string,
-  TAccountAcceptedMint extends string,
-  TAccountDelegate extends string,
-  TAccountTokenProgram extends string,
-  TProgramAddress extends Address = typeof SOLBILL_PROGRAM_ADDRESS,
->(
-  input: CollectPaymentAsyncInput<
-    TAccountAuthority,
-    TAccountService,
-    TAccountSubscription,
-    TAccountSubscriberTokenAccount,
-    TAccountTreasury,
-    TAccountAcceptedMint,
-    TAccountDelegate,
-    TAccountTokenProgram
-  >,
-  config?: { programAddress?: TProgramAddress },
-): Promise<
-  CollectPaymentInstruction<
-    TProgramAddress,
-    TAccountAuthority,
-    TAccountService,
-    TAccountSubscription,
-    TAccountSubscriberTokenAccount,
-    TAccountTreasury,
-    TAccountAcceptedMint,
-    TAccountDelegate,
-    TAccountTokenProgram
-  >
-> {
-  // Program address.
-  const programAddress = config?.programAddress ?? SOLBILL_PROGRAM_ADDRESS;
-
-  // Original accounts.
-  const originalAccounts = {
-    authority: { value: input.authority ?? null, isWritable: false },
-    service: { value: input.service ?? null, isWritable: false },
-    subscription: { value: input.subscription ?? null, isWritable: true },
-    subscriberTokenAccount: {
-      value: input.subscriberTokenAccount ?? null,
-      isWritable: true,
-    },
-    treasury: { value: input.treasury ?? null, isWritable: true },
-    acceptedMint: { value: input.acceptedMint ?? null, isWritable: false },
-    delegate: { value: input.delegate ?? null, isWritable: false },
-    tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
-  };
-  const accounts = originalAccounts as Record<
-    keyof typeof originalAccounts,
-    ResolvedAccount
-  >;
-
-  // Resolve default values.
-  if (!accounts.service.value) {
-    accounts.service.value = await getProgramDerivedAddress({
-      programAddress,
-      seeds: [
-        getBytesEncoder().encode(
-          new Uint8Array([115, 101, 114, 118, 105, 99, 101]),
-        ),
-        getAddressEncoder().encode(expectAddress(accounts.authority.value)),
-      ],
-    });
-  }
-  if (!accounts.tokenProgram.value) {
-    accounts.tokenProgram.value =
-      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address<"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA">;
-  }
-
-  const getAccountMeta = getAccountMetaFactory(programAddress, "programId");
-  return Object.freeze({
-    accounts: [
-      getAccountMeta(accounts.authority),
-      getAccountMeta(accounts.service),
-      getAccountMeta(accounts.subscription),
-      getAccountMeta(accounts.subscriberTokenAccount),
-      getAccountMeta(accounts.treasury),
-      getAccountMeta(accounts.acceptedMint),
-      getAccountMeta(accounts.delegate),
-      getAccountMeta(accounts.tokenProgram),
-    ],
-    data: getCollectPaymentInstructionDataEncoder().encode({}),
-    programAddress,
-  } as CollectPaymentInstruction<
-    TProgramAddress,
-    TAccountAuthority,
-    TAccountService,
-    TAccountSubscription,
-    TAccountSubscriberTokenAccount,
-    TAccountTreasury,
-    TAccountAcceptedMint,
-    TAccountDelegate,
-    TAccountTokenProgram
-  >);
-}
-
 export type CollectPaymentInput<
-  TAccountAuthority extends string = string,
+  TAccountCranker extends string = string,
   TAccountService extends string = string,
   TAccountSubscription extends string = string,
   TAccountSubscriberTokenAccount extends string = string,
   TAccountTreasury extends string = string,
+  TAccountCrankerTokenAccount extends string = string,
   TAccountAcceptedMint extends string = string,
   TAccountDelegate extends string = string,
   TAccountTokenProgram extends string = string,
 > = {
-  /** The merchant (or their worker) who triggers billing. */
-  authority: TransactionSigner<TAccountAuthority>;
+  /** The public crank turner who triggers the payment and receives the reward. */
+  cranker: TransactionSigner<TAccountCranker>;
   service: Address<TAccountService>;
   subscription: Address<TAccountSubscription>;
   /** The subscriber's token account (source of funds). */
   subscriberTokenAccount: Address<TAccountSubscriberTokenAccount>;
-  /** The merchant's treasury token account (destination). */
+  /** The merchant's treasury token account (destination for main payment). */
   treasury: Address<TAccountTreasury>;
+  /** The cranker's token account (destination for bounty/reward). */
+  crankerTokenAccount: Address<TAccountCrankerTokenAccount>;
   /** The accepted SPL token mint. */
   acceptedMint: Address<TAccountAcceptedMint>;
   delegate: Address<TAccountDelegate>;
@@ -273,22 +149,24 @@ export type CollectPaymentInput<
 };
 
 export function getCollectPaymentInstruction<
-  TAccountAuthority extends string,
+  TAccountCranker extends string,
   TAccountService extends string,
   TAccountSubscription extends string,
   TAccountSubscriberTokenAccount extends string,
   TAccountTreasury extends string,
+  TAccountCrankerTokenAccount extends string,
   TAccountAcceptedMint extends string,
   TAccountDelegate extends string,
   TAccountTokenProgram extends string,
   TProgramAddress extends Address = typeof SOLBILL_PROGRAM_ADDRESS,
 >(
   input: CollectPaymentInput<
-    TAccountAuthority,
+    TAccountCranker,
     TAccountService,
     TAccountSubscription,
     TAccountSubscriberTokenAccount,
     TAccountTreasury,
+    TAccountCrankerTokenAccount,
     TAccountAcceptedMint,
     TAccountDelegate,
     TAccountTokenProgram
@@ -296,11 +174,12 @@ export function getCollectPaymentInstruction<
   config?: { programAddress?: TProgramAddress },
 ): CollectPaymentInstruction<
   TProgramAddress,
-  TAccountAuthority,
+  TAccountCranker,
   TAccountService,
   TAccountSubscription,
   TAccountSubscriberTokenAccount,
   TAccountTreasury,
+  TAccountCrankerTokenAccount,
   TAccountAcceptedMint,
   TAccountDelegate,
   TAccountTokenProgram
@@ -310,7 +189,7 @@ export function getCollectPaymentInstruction<
 
   // Original accounts.
   const originalAccounts = {
-    authority: { value: input.authority ?? null, isWritable: false },
+    cranker: { value: input.cranker ?? null, isWritable: true },
     service: { value: input.service ?? null, isWritable: false },
     subscription: { value: input.subscription ?? null, isWritable: true },
     subscriberTokenAccount: {
@@ -318,6 +197,10 @@ export function getCollectPaymentInstruction<
       isWritable: true,
     },
     treasury: { value: input.treasury ?? null, isWritable: true },
+    crankerTokenAccount: {
+      value: input.crankerTokenAccount ?? null,
+      isWritable: true,
+    },
     acceptedMint: { value: input.acceptedMint ?? null, isWritable: false },
     delegate: { value: input.delegate ?? null, isWritable: false },
     tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
@@ -336,11 +219,12 @@ export function getCollectPaymentInstruction<
   const getAccountMeta = getAccountMetaFactory(programAddress, "programId");
   return Object.freeze({
     accounts: [
-      getAccountMeta(accounts.authority),
+      getAccountMeta(accounts.cranker),
       getAccountMeta(accounts.service),
       getAccountMeta(accounts.subscription),
       getAccountMeta(accounts.subscriberTokenAccount),
       getAccountMeta(accounts.treasury),
+      getAccountMeta(accounts.crankerTokenAccount),
       getAccountMeta(accounts.acceptedMint),
       getAccountMeta(accounts.delegate),
       getAccountMeta(accounts.tokenProgram),
@@ -349,11 +233,12 @@ export function getCollectPaymentInstruction<
     programAddress,
   } as CollectPaymentInstruction<
     TProgramAddress,
-    TAccountAuthority,
+    TAccountCranker,
     TAccountService,
     TAccountSubscription,
     TAccountSubscriberTokenAccount,
     TAccountTreasury,
+    TAccountCrankerTokenAccount,
     TAccountAcceptedMint,
     TAccountDelegate,
     TAccountTokenProgram
@@ -366,18 +251,20 @@ export type ParsedCollectPaymentInstruction<
 > = {
   programAddress: Address<TProgram>;
   accounts: {
-    /** The merchant (or their worker) who triggers billing. */
-    authority: TAccountMetas[0];
+    /** The public crank turner who triggers the payment and receives the reward. */
+    cranker: TAccountMetas[0];
     service: TAccountMetas[1];
     subscription: TAccountMetas[2];
     /** The subscriber's token account (source of funds). */
     subscriberTokenAccount: TAccountMetas[3];
-    /** The merchant's treasury token account (destination). */
+    /** The merchant's treasury token account (destination for main payment). */
     treasury: TAccountMetas[4];
+    /** The cranker's token account (destination for bounty/reward). */
+    crankerTokenAccount: TAccountMetas[5];
     /** The accepted SPL token mint. */
-    acceptedMint: TAccountMetas[5];
-    delegate: TAccountMetas[6];
-    tokenProgram: TAccountMetas[7];
+    acceptedMint: TAccountMetas[6];
+    delegate: TAccountMetas[7];
+    tokenProgram: TAccountMetas[8];
   };
   data: CollectPaymentInstructionData;
 };
@@ -390,7 +277,7 @@ export function parseCollectPaymentInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedCollectPaymentInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 8) {
+  if (instruction.accounts.length < 9) {
     // TODO: Coded error.
     throw new Error("Not enough accounts");
   }
@@ -403,11 +290,12 @@ export function parseCollectPaymentInstruction<
   return {
     programAddress: instruction.programAddress,
     accounts: {
-      authority: getNextAccount(),
+      cranker: getNextAccount(),
       service: getNextAccount(),
       subscription: getNextAccount(),
       subscriberTokenAccount: getNextAccount(),
       treasury: getNextAccount(),
+      crankerTokenAccount: getNextAccount(),
       acceptedMint: getNextAccount(),
       delegate: getNextAccount(),
       tokenProgram: getNextAccount(),

@@ -71,6 +71,8 @@ export type SubscriptionAccount = {
   subscriberTokenAccount: Address;
   /** Locked-in payment amount (copied from Plan at creation). */
   amount: bigint;
+  /** Reward paid to the cranker (copied from Plan at creation). */
+  crankReward: bigint;
   /** Locked-in billing interval in seconds (copied from Plan at creation). */
   interval: bigint;
   /** Unix timestamp when the next payment is due. */
@@ -98,6 +100,8 @@ export type SubscriptionAccountArgs = {
   subscriberTokenAccount: Address;
   /** Locked-in payment amount (copied from Plan at creation). */
   amount: number | bigint;
+  /** Reward paid to the cranker (copied from Plan at creation). */
+  crankReward: number | bigint;
   /** Locked-in billing interval in seconds (copied from Plan at creation). */
   interval: number | bigint;
   /** Unix timestamp when the next payment is due. */
@@ -124,6 +128,7 @@ export function getSubscriptionAccountEncoder(): FixedSizeEncoder<SubscriptionAc
       ["plan", getAddressEncoder()],
       ["subscriberTokenAccount", getAddressEncoder()],
       ["amount", getU64Encoder()],
+      ["crankReward", getU64Encoder()],
       ["interval", getI64Encoder()],
       ["nextBillingTimestamp", getI64Encoder()],
       ["lastPaymentTimestamp", getI64Encoder()],
@@ -148,6 +153,7 @@ export function getSubscriptionAccountDecoder(): FixedSizeDecoder<SubscriptionAc
     ["plan", getAddressDecoder()],
     ["subscriberTokenAccount", getAddressDecoder()],
     ["amount", getU64Decoder()],
+    ["crankReward", getU64Decoder()],
     ["interval", getI64Decoder()],
     ["nextBillingTimestamp", getI64Decoder()],
     ["lastPaymentTimestamp", getI64Decoder()],
@@ -239,5 +245,5 @@ export async function fetchAllMaybeSubscriptionAccount(
 }
 
 export function getSubscriptionAccountSize(): number {
-  return 182;
+  return 190;
 }

@@ -63,6 +63,8 @@ export type PlanAccount = {
   name: ReadonlyUint8Array;
   /** Payment amount per interval (smallest token unit, e.g. 1_000_000 = 1 USDC). */
   amount: bigint;
+  /** Reward paid to the cranker (caller) for processing payment. */
+  crankReward: bigint;
   /** Billing interval in seconds (e.g. 2_592_000 = 30 days). */
   interval: bigint;
   /** Whether new subscriptions can be created for this plan. */
@@ -82,6 +84,8 @@ export type PlanAccountArgs = {
   name: ReadonlyUint8Array;
   /** Payment amount per interval (smallest token unit, e.g. 1_000_000 = 1 USDC). */
   amount: number | bigint;
+  /** Reward paid to the cranker (caller) for processing payment. */
+  crankReward: number | bigint;
   /** Billing interval in seconds (e.g. 2_592_000 = 30 days). */
   interval: number | bigint;
   /** Whether new subscriptions can be created for this plan. */
@@ -102,6 +106,7 @@ export function getPlanAccountEncoder(): FixedSizeEncoder<PlanAccountArgs> {
       ["service", getAddressEncoder()],
       ["name", fixEncoderSize(getBytesEncoder(), 32)],
       ["amount", getU64Encoder()],
+      ["crankReward", getU64Encoder()],
       ["interval", getI64Encoder()],
       ["isActive", getBooleanEncoder()],
       ["gracePeriod", getI64Encoder()],
@@ -119,6 +124,7 @@ export function getPlanAccountDecoder(): FixedSizeDecoder<PlanAccount> {
     ["service", getAddressDecoder()],
     ["name", fixDecoderSize(getBytesDecoder(), 32)],
     ["amount", getU64Decoder()],
+    ["crankReward", getU64Decoder()],
     ["interval", getI64Decoder()],
     ["isActive", getBooleanDecoder()],
     ["gracePeriod", getI64Decoder()],
@@ -189,5 +195,5 @@ export async function fetchAllMaybePlanAccount(
 }
 
 export function getPlanAccountSize(): number {
-  return 100;
+  return 108;
 }

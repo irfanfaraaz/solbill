@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::SolBillError;
+use crate::errors::SolscribeError;
 use crate::state::{PlanAccount, ServiceAccount, PLAN_ACCOUNT_SIZE};
 
 #[derive(Accounts)]
@@ -12,7 +12,7 @@ pub struct CreatePlan<'info> {
         mut,
         seeds = [b"service", authority.key().as_ref()],
         bump = service.bump,
-        has_one = authority @ SolBillError::UnauthorizedAuthority,
+        has_one = authority @ SolscribeError::UnauthorizedAuthority,
     )]
     pub service: Account<'info, ServiceAccount>,
 
@@ -32,15 +32,17 @@ pub fn handler(
     ctx: Context<CreatePlan>,
     name: String,
     amount: u64,
+    crank_reward: u64,
     interval: i64,
     grace_period: i64,
 ) -> Result<()> {
     require!(
         !name.is_empty() && name.len() <= 32,
-        SolBillError::InvalidPlanName
+        SolscribeError::InvalidPlanName
     );
-    require!(amount > 0, SolBillError::InvalidAmount);
-    require!(interval > 0, SolBillError::InvalidInterval);
+    require!(amount > 0, SolscribeError::InvalidAmount);
+    require!(interval > 0, SolscribeError::InvalidInterval);
+    require!(crank_reward < amount, SolscribeError::InvalidCrankReward);
 
     let plan = &mut ctx.accounts.plan;
     let service = &mut ctx.accounts.service;
@@ -54,6 +56,7 @@ pub fn handler(
     plan.name = name_bytes;
 
     plan.amount = amount;
+    plan.crank_reward = crank_reward;
     plan.interval = interval;
     plan.is_active = true;
     plan.grace_period = grace_period;
@@ -64,14 +67,15 @@ pub fn handler(
     service.plan_count = service
         .plan_count
         .checked_add(1)
-        .ok_or(SolBillError::Overflow)?;
+        .ok_or(SolscribeError::Overflow)?;
 
     msg!(
-        "Plan '{}' created (index {}) — {} tokens every {}s",
+        "Plan '{}' created (index {}) — {} tokens every {}s (Crank Reward: {})",
         name,
         plan.plan_index,
         plan.amount,
         plan.interval,
+        plan.crank_reward,
     );
     Ok(())
 }
