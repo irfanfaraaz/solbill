@@ -18,6 +18,7 @@ pub struct ExpireSubscription<'info> {
         mut,
         seeds = [b"subscription", subscription.subscriber.as_ref(), subscription.plan.as_ref()],
         bump = subscription.bump,
+        close = cranker,
         constraint = subscription.plan == plan.key(),
         constraint = subscription.status == SubscriptionStatus::PastDue @ SolBillError::NotPastDue,
     )]

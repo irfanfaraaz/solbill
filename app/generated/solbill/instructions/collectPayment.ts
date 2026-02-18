@@ -52,7 +52,6 @@ export type CollectPaymentInstruction<
   TAccountTreasury extends string | AccountMeta<string> = string,
   TAccountCrankerTokenAccount extends string | AccountMeta<string> = string,
   TAccountAcceptedMint extends string | AccountMeta<string> = string,
-  TAccountDelegate extends string | AccountMeta<string> = string,
   TAccountTokenProgram extends string | AccountMeta<string> =
     "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
@@ -82,9 +81,6 @@ export type CollectPaymentInstruction<
       TAccountAcceptedMint extends string
         ? ReadonlyAccount<TAccountAcceptedMint>
         : TAccountAcceptedMint,
-      TAccountDelegate extends string
-        ? ReadonlyAccount<TAccountDelegate>
-        : TAccountDelegate,
       TAccountTokenProgram extends string
         ? ReadonlyAccount<TAccountTokenProgram>
         : TAccountTokenProgram,
@@ -129,7 +125,6 @@ export type CollectPaymentInput<
   TAccountTreasury extends string = string,
   TAccountCrankerTokenAccount extends string = string,
   TAccountAcceptedMint extends string = string,
-  TAccountDelegate extends string = string,
   TAccountTokenProgram extends string = string,
 > = {
   /** The public crank turner who triggers the payment and receives the reward. */
@@ -144,7 +139,6 @@ export type CollectPaymentInput<
   crankerTokenAccount: Address<TAccountCrankerTokenAccount>;
   /** The accepted SPL token mint. */
   acceptedMint: Address<TAccountAcceptedMint>;
-  delegate: Address<TAccountDelegate>;
   tokenProgram?: Address<TAccountTokenProgram>;
 };
 
@@ -156,7 +150,6 @@ export function getCollectPaymentInstruction<
   TAccountTreasury extends string,
   TAccountCrankerTokenAccount extends string,
   TAccountAcceptedMint extends string,
-  TAccountDelegate extends string,
   TAccountTokenProgram extends string,
   TProgramAddress extends Address = typeof SOLBILL_PROGRAM_ADDRESS,
 >(
@@ -168,7 +161,6 @@ export function getCollectPaymentInstruction<
     TAccountTreasury,
     TAccountCrankerTokenAccount,
     TAccountAcceptedMint,
-    TAccountDelegate,
     TAccountTokenProgram
   >,
   config?: { programAddress?: TProgramAddress },
@@ -181,7 +173,6 @@ export function getCollectPaymentInstruction<
   TAccountTreasury,
   TAccountCrankerTokenAccount,
   TAccountAcceptedMint,
-  TAccountDelegate,
   TAccountTokenProgram
 > {
   // Program address.
@@ -202,7 +193,6 @@ export function getCollectPaymentInstruction<
       isWritable: true,
     },
     acceptedMint: { value: input.acceptedMint ?? null, isWritable: false },
-    delegate: { value: input.delegate ?? null, isWritable: false },
     tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
   };
   const accounts = originalAccounts as Record<
@@ -226,7 +216,6 @@ export function getCollectPaymentInstruction<
       getAccountMeta(accounts.treasury),
       getAccountMeta(accounts.crankerTokenAccount),
       getAccountMeta(accounts.acceptedMint),
-      getAccountMeta(accounts.delegate),
       getAccountMeta(accounts.tokenProgram),
     ],
     data: getCollectPaymentInstructionDataEncoder().encode({}),
@@ -240,7 +229,6 @@ export function getCollectPaymentInstruction<
     TAccountTreasury,
     TAccountCrankerTokenAccount,
     TAccountAcceptedMint,
-    TAccountDelegate,
     TAccountTokenProgram
   >);
 }
@@ -263,8 +251,7 @@ export type ParsedCollectPaymentInstruction<
     crankerTokenAccount: TAccountMetas[5];
     /** The accepted SPL token mint. */
     acceptedMint: TAccountMetas[6];
-    delegate: TAccountMetas[7];
-    tokenProgram: TAccountMetas[8];
+    tokenProgram: TAccountMetas[7];
   };
   data: CollectPaymentInstructionData;
 };
@@ -277,7 +264,7 @@ export function parseCollectPaymentInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedCollectPaymentInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 9) {
+  if (instruction.accounts.length < 8) {
     // TODO: Coded error.
     throw new Error("Not enough accounts");
   }
@@ -297,7 +284,6 @@ export function parseCollectPaymentInstruction<
       treasury: getNextAccount(),
       crankerTokenAccount: getNextAccount(),
       acceptedMint: getNextAccount(),
-      delegate: getNextAccount(),
       tokenProgram: getNextAccount(),
     },
     data: getCollectPaymentInstructionDataDecoder().decode(instruction.data),

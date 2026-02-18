@@ -44,6 +44,7 @@ pub struct CollectPayment<'info> {
     #[account(
         mut,
         token::mint = accepted_mint,
+        constraint = cranker_token_account.owner == cranker.key() @ SolBillError::InvalidCrankerTokenAccount,
     )]
     pub cranker_token_account: InterfaceAccount<'info, TokenAccount>,
 

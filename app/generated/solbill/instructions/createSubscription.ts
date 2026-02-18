@@ -57,7 +57,6 @@ export type CreateSubscriptionInstruction<
   TAccountSubscription extends string | AccountMeta<string> = string,
   TAccountSubscriberTokenAccount extends string | AccountMeta<string> = string,
   TAccountAcceptedMint extends string | AccountMeta<string> = string,
-  TAccountDelegate extends string | AccountMeta<string> = string,
   TAccountTreasury extends string | AccountMeta<string> = string,
   TAccountTokenProgram extends string | AccountMeta<string> =
     "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
@@ -87,9 +86,6 @@ export type CreateSubscriptionInstruction<
       TAccountAcceptedMint extends string
         ? ReadonlyAccount<TAccountAcceptedMint>
         : TAccountAcceptedMint,
-      TAccountDelegate extends string
-        ? ReadonlyAccount<TAccountDelegate>
-        : TAccountDelegate,
       TAccountTreasury extends string
         ? WritableAccount<TAccountTreasury>
         : TAccountTreasury,
@@ -139,7 +135,6 @@ export type CreateSubscriptionAsyncInput<
   TAccountSubscription extends string = string,
   TAccountSubscriberTokenAccount extends string = string,
   TAccountAcceptedMint extends string = string,
-  TAccountDelegate extends string = string,
   TAccountTreasury extends string = string,
   TAccountTokenProgram extends string = string,
   TAccountSystemProgram extends string = string,
@@ -152,8 +147,6 @@ export type CreateSubscriptionAsyncInput<
   subscriberTokenAccount: Address<TAccountSubscriberTokenAccount>;
   /** The SPL mint accepted by the service. */
   acceptedMint: Address<TAccountAcceptedMint>;
-  /** The subscription PDA will be the delegate. */
-  delegate?: Address<TAccountDelegate>;
   /** The merchant's treasury token account (destination for first payment). */
   treasury: Address<TAccountTreasury>;
   tokenProgram?: Address<TAccountTokenProgram>;
@@ -167,7 +160,6 @@ export async function getCreateSubscriptionInstructionAsync<
   TAccountSubscription extends string,
   TAccountSubscriberTokenAccount extends string,
   TAccountAcceptedMint extends string,
-  TAccountDelegate extends string,
   TAccountTreasury extends string,
   TAccountTokenProgram extends string,
   TAccountSystemProgram extends string,
@@ -180,7 +172,6 @@ export async function getCreateSubscriptionInstructionAsync<
     TAccountSubscription,
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
-    TAccountDelegate,
     TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
@@ -195,7 +186,6 @@ export async function getCreateSubscriptionInstructionAsync<
     TAccountSubscription,
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
-    TAccountDelegate,
     TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
@@ -215,7 +205,6 @@ export async function getCreateSubscriptionInstructionAsync<
       isWritable: true,
     },
     acceptedMint: { value: input.acceptedMint ?? null, isWritable: false },
-    delegate: { value: input.delegate ?? null, isWritable: false },
     treasury: { value: input.treasury ?? null, isWritable: true },
     tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
     systemProgram: { value: input.systemProgram ?? null, isWritable: false },
@@ -240,20 +229,6 @@ export async function getCreateSubscriptionInstructionAsync<
       ],
     });
   }
-  if (!accounts.delegate.value) {
-    accounts.delegate.value = await getProgramDerivedAddress({
-      programAddress,
-      seeds: [
-        getBytesEncoder().encode(
-          new Uint8Array([
-            115, 117, 98, 115, 99, 114, 105, 112, 116, 105, 111, 110,
-          ]),
-        ),
-        getAddressEncoder().encode(expectAddress(accounts.subscriber.value)),
-        getAddressEncoder().encode(expectAddress(accounts.plan.value)),
-      ],
-    });
-  }
   if (!accounts.tokenProgram.value) {
     accounts.tokenProgram.value =
       "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address<"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA">;
@@ -272,7 +247,6 @@ export async function getCreateSubscriptionInstructionAsync<
       getAccountMeta(accounts.subscription),
       getAccountMeta(accounts.subscriberTokenAccount),
       getAccountMeta(accounts.acceptedMint),
-      getAccountMeta(accounts.delegate),
       getAccountMeta(accounts.treasury),
       getAccountMeta(accounts.tokenProgram),
       getAccountMeta(accounts.systemProgram),
@@ -287,7 +261,6 @@ export async function getCreateSubscriptionInstructionAsync<
     TAccountSubscription,
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
-    TAccountDelegate,
     TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
@@ -301,7 +274,6 @@ export type CreateSubscriptionInput<
   TAccountSubscription extends string = string,
   TAccountSubscriberTokenAccount extends string = string,
   TAccountAcceptedMint extends string = string,
-  TAccountDelegate extends string = string,
   TAccountTreasury extends string = string,
   TAccountTokenProgram extends string = string,
   TAccountSystemProgram extends string = string,
@@ -314,8 +286,6 @@ export type CreateSubscriptionInput<
   subscriberTokenAccount: Address<TAccountSubscriberTokenAccount>;
   /** The SPL mint accepted by the service. */
   acceptedMint: Address<TAccountAcceptedMint>;
-  /** The subscription PDA will be the delegate. */
-  delegate: Address<TAccountDelegate>;
   /** The merchant's treasury token account (destination for first payment). */
   treasury: Address<TAccountTreasury>;
   tokenProgram?: Address<TAccountTokenProgram>;
@@ -329,7 +299,6 @@ export function getCreateSubscriptionInstruction<
   TAccountSubscription extends string,
   TAccountSubscriberTokenAccount extends string,
   TAccountAcceptedMint extends string,
-  TAccountDelegate extends string,
   TAccountTreasury extends string,
   TAccountTokenProgram extends string,
   TAccountSystemProgram extends string,
@@ -342,7 +311,6 @@ export function getCreateSubscriptionInstruction<
     TAccountSubscription,
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
-    TAccountDelegate,
     TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
@@ -356,7 +324,6 @@ export function getCreateSubscriptionInstruction<
   TAccountSubscription,
   TAccountSubscriberTokenAccount,
   TAccountAcceptedMint,
-  TAccountDelegate,
   TAccountTreasury,
   TAccountTokenProgram,
   TAccountSystemProgram
@@ -375,7 +342,6 @@ export function getCreateSubscriptionInstruction<
       isWritable: true,
     },
     acceptedMint: { value: input.acceptedMint ?? null, isWritable: false },
-    delegate: { value: input.delegate ?? null, isWritable: false },
     treasury: { value: input.treasury ?? null, isWritable: true },
     tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
     systemProgram: { value: input.systemProgram ?? null, isWritable: false },
@@ -404,7 +370,6 @@ export function getCreateSubscriptionInstruction<
       getAccountMeta(accounts.subscription),
       getAccountMeta(accounts.subscriberTokenAccount),
       getAccountMeta(accounts.acceptedMint),
-      getAccountMeta(accounts.delegate),
       getAccountMeta(accounts.treasury),
       getAccountMeta(accounts.tokenProgram),
       getAccountMeta(accounts.systemProgram),
@@ -419,7 +384,6 @@ export function getCreateSubscriptionInstruction<
     TAccountSubscription,
     TAccountSubscriberTokenAccount,
     TAccountAcceptedMint,
-    TAccountDelegate,
     TAccountTreasury,
     TAccountTokenProgram,
     TAccountSystemProgram
@@ -440,12 +404,10 @@ export type ParsedCreateSubscriptionInstruction<
     subscriberTokenAccount: TAccountMetas[4];
     /** The SPL mint accepted by the service. */
     acceptedMint: TAccountMetas[5];
-    /** The subscription PDA will be the delegate. */
-    delegate: TAccountMetas[6];
     /** The merchant's treasury token account (destination for first payment). */
-    treasury: TAccountMetas[7];
-    tokenProgram: TAccountMetas[8];
-    systemProgram: TAccountMetas[9];
+    treasury: TAccountMetas[6];
+    tokenProgram: TAccountMetas[7];
+    systemProgram: TAccountMetas[8];
   };
   data: CreateSubscriptionInstructionData;
 };
@@ -458,7 +420,7 @@ export function parseCreateSubscriptionInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>,
 ): ParsedCreateSubscriptionInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 10) {
+  if (instruction.accounts.length < 9) {
     // TODO: Coded error.
     throw new Error("Not enough accounts");
   }
@@ -477,7 +439,6 @@ export function parseCreateSubscriptionInstruction<
       subscription: getNextAccount(),
       subscriberTokenAccount: getNextAccount(),
       acceptedMint: getNextAccount(),
-      delegate: getNextAccount(),
       treasury: getNextAccount(),
       tokenProgram: getNextAccount(),
       systemProgram: getNextAccount(),

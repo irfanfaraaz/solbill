@@ -129,7 +129,6 @@ async function runWorker() {
               treasury: service.treasury,
               crankerTokenAccount: crankerTokenAccount,
               acceptedMint: service.acceptedMint,
-              delegate: account.pubkey, // Using the subscription PDA as delegate
             });
 
             // Send Transaction

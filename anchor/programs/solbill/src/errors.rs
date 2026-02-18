@@ -28,4 +28,6 @@ pub enum SolBillError {
     InvalidCrankReward,
     #[msg("Subscription has completed all billing cycles")]
     SubscriptionCompleted,
+    #[msg("Invalid cranker token account — must be owned by the cranker")]
+    InvalidCrankerTokenAccount,
 }

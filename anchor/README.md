@@ -1,76 +1,50 @@
-# Anchor Vault Program
+# SolBill: Smart Contract Suite
 
-This template includes a simple SOL vault program built with [Anchor](https://www.anchor-lang.com/).
+This directory contains the Solana program logic for SolBill, an autonomous recurring billing engine built with Anchor.
 
-## Pre-deployed Program
+## 🏗 Program Structure
 
-The vault program is deployed on **devnet** at:
+- **`programs/solbill/src/lib.rs`**: Main entry point and program ID declaration.
+- **`programs/solbill/src/instructions/`**: Modular instruction handlers (Modularized to prevent stack overflows).
+  - `initialize_service`: Setup merchant profile.
+  - `create_plan`: Define billing rules (price, interval, max cycles).
+  - `create_subscription`: Handle signup and upfront payments.
+  - `collect_payment`: The "Crank" endpoint for recurring billing.
+- **`programs/solbill/src/state.rs`**: Definitions for `ServiceAccount`, `PlanAccount`, and `SubscriptionAccount`.
+- **`programs/solbill/src/tests.rs`**: Comprehensive `LiteSVM` tests.
 
-```
-F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB
-```
+## ⚙️ Development
 
-You can interact with it immediately by connecting your wallet to devnet.
+### Prerequisites
 
-## Deploying Your Own Program
+- [Anchor CLI v0.31.0+](https://www.anchor-lang.com/docs/installation)
+- [Solana CLI v2.1.0+](https://docs.solana.com/cli/install-solana-cli-tools)
 
-To deploy your own version of the program:
-
-### 1. Generate a new program keypair
-
-```bash
-cd anchor
-solana-keygen new -o target/deploy/vault-keypair.json
-```
-
-### 2. Get the new program ID
+### Build
 
 ```bash
-solana address -k target/deploy/vault-keypair.json
-```
-
-### 3. Update the program ID
-
-Update the program ID in these files:
-
-- `anchor/Anchor.toml` - Update `vault = "..."` under `[programs.devnet]`
-- `anchor/programs/vault/src/lib.rs` - Update `declare_id!("...")`
-
-### 4. Build and deploy
-
-```bash
-# Build the program
 anchor build
-
-# Get devnet SOL for deployment (~2 SOL needed)
-solana airdrop 2 --url devnet
-
-# Deploy to devnet
-anchor deploy --provider.cluster devnet
 ```
 
-### 5. Regenerate the TypeScript client
+### Test (Local Simulation)
+
+We use `LiteSVM` for blazing fast test execution without a local validator.
 
 ```bash
-cd ..
-npm run codama:js
+cargo test -- --nocapture
 ```
 
-This updates the generated client code in `app/generated/vault/` with your new program ID.
+## 🔐 Security Constants
 
-## Program Overview
+- **Access Guard**: Only the merchant can update their plans.
+- **Account Sizing**: All accounts use `InitSpace` for precise allocation.
+- **PDA Seeds**:
+  - Service: `[b"service", merchant.key()]`
+  - Plan: `[b"plan", service.key(), index.to_le_bytes()]`
+  - Subscription: `[b"subscription", subscriber.key(), plan.key()]`
 
-The vault program allows users to:
+## 🚀 Deployment
 
-- **Deposit**: Send SOL to a personal vault PDA (Program Derived Address)
-- **Withdraw**: Retrieve all SOL from your vault
-
-Each user gets their own vault derived from their wallet address.
-
-## Testing
-
-Run the Anchor tests:
-
-```bash
-anchor test --skip-deploy
-```
+1. Update `declare_id!` in `lib.rs`.
+2. Update `[programs.localnet]` in `Anchor.toml`.
+3. Run `anchor deploy`.

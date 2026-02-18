@@ -93,6 +93,7 @@ export type CreatePlanInstructionData = {
   crankReward: bigint;
   interval: bigint;
   gracePeriod: bigint;
+  maxBillingCycles: bigint;
 };
 
 export type CreatePlanInstructionDataArgs = {
@@ -101,6 +102,7 @@ export type CreatePlanInstructionDataArgs = {
   crankReward: number | bigint;
   interval: number | bigint;
   gracePeriod: number | bigint;
+  maxBillingCycles: number | bigint;
 };
 
 export function getCreatePlanInstructionDataEncoder(): Encoder<CreatePlanInstructionDataArgs> {
@@ -112,6 +114,7 @@ export function getCreatePlanInstructionDataEncoder(): Encoder<CreatePlanInstruc
       ["crankReward", getU64Encoder()],
       ["interval", getI64Encoder()],
       ["gracePeriod", getI64Encoder()],
+      ["maxBillingCycles", getU64Encoder()],
     ]),
     (value) => ({ ...value, discriminator: CREATE_PLAN_DISCRIMINATOR }),
   );
@@ -125,6 +128,7 @@ export function getCreatePlanInstructionDataDecoder(): Decoder<CreatePlanInstruc
     ["crankReward", getU64Decoder()],
     ["interval", getI64Decoder()],
     ["gracePeriod", getI64Decoder()],
+    ["maxBillingCycles", getU64Decoder()],
   ]);
 }
 
@@ -153,6 +157,7 @@ export type CreatePlanAsyncInput<
   crankReward: CreatePlanInstructionDataArgs["crankReward"];
   interval: CreatePlanInstructionDataArgs["interval"];
   gracePeriod: CreatePlanInstructionDataArgs["gracePeriod"];
+  maxBillingCycles: CreatePlanInstructionDataArgs["maxBillingCycles"];
 };
 
 export async function getCreatePlanInstructionAsync<
@@ -249,6 +254,7 @@ export type CreatePlanInput<
   crankReward: CreatePlanInstructionDataArgs["crankReward"];
   interval: CreatePlanInstructionDataArgs["interval"];
   gracePeriod: CreatePlanInstructionDataArgs["gracePeriod"];
+  maxBillingCycles: CreatePlanInstructionDataArgs["maxBillingCycles"];
 };
 
 export function getCreatePlanInstruction<

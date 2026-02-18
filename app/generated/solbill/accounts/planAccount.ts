@@ -73,6 +73,8 @@ export type PlanAccount = {
   gracePeriod: bigint;
   /** Index of this plan within the service (used in PDA seeds). */
   planIndex: number;
+  /** Limit on number of billing cycles (0 = infinite, 1 = one-time). */
+  maxBillingCycles: bigint;
   /** PDA bump seed. */
   bump: number;
 };
@@ -94,6 +96,8 @@ export type PlanAccountArgs = {
   gracePeriod: number | bigint;
   /** Index of this plan within the service (used in PDA seeds). */
   planIndex: number;
+  /** Limit on number of billing cycles (0 = infinite, 1 = one-time). */
+  maxBillingCycles: number | bigint;
   /** PDA bump seed. */
   bump: number;
 };
@@ -111,6 +115,7 @@ export function getPlanAccountEncoder(): FixedSizeEncoder<PlanAccountArgs> {
       ["isActive", getBooleanEncoder()],
       ["gracePeriod", getI64Encoder()],
       ["planIndex", getU16Encoder()],
+      ["maxBillingCycles", getU64Encoder()],
       ["bump", getU8Encoder()],
     ]),
     (value) => ({ ...value, discriminator: PLAN_ACCOUNT_DISCRIMINATOR }),
@@ -129,6 +134,7 @@ export function getPlanAccountDecoder(): FixedSizeDecoder<PlanAccount> {
     ["isActive", getBooleanDecoder()],
     ["gracePeriod", getI64Decoder()],
     ["planIndex", getU16Decoder()],
+    ["maxBillingCycles", getU64Decoder()],
     ["bump", getU8Decoder()],
   ]);
 }
@@ -195,5 +201,5 @@ export async function fetchAllMaybePlanAccount(
 }
 
 export function getPlanAccountSize(): number {
-  return 108;
+  return 116;
 }

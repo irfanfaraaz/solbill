@@ -21,6 +21,7 @@ export enum SubscriptionStatus {
   PastDue,
   Cancelled,
   Expired,
+  Completed,
 }
 
 export type SubscriptionStatusArgs = SubscriptionStatus;

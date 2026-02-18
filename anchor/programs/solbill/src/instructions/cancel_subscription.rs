@@ -21,6 +21,7 @@ pub struct CancelSubscription<'info> {
         bump = subscription.bump,
         has_one = subscriber,
         has_one = service,
+        close = subscriber,
         constraint = subscription.status != SubscriptionStatus::Cancelled @ SolBillError::AlreadyCancelled,
     )]
     pub subscription: Account<'info, SubscriptionAccount>,

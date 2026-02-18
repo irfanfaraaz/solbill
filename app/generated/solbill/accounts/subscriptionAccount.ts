@@ -85,6 +85,8 @@ export type SubscriptionAccount = {
   status: SubscriptionStatus;
   /** Total number of successful payments collected. */
   paymentsMade: number;
+  /** Limit on number of billing cycles (0 = infinite). */
+  maxBillingCycles: bigint;
   /** PDA bump seed. */
   bump: number;
 };
@@ -114,6 +116,8 @@ export type SubscriptionAccountArgs = {
   status: SubscriptionStatusArgs;
   /** Total number of successful payments collected. */
   paymentsMade: number;
+  /** Limit on number of billing cycles (0 = infinite). */
+  maxBillingCycles: number | bigint;
   /** PDA bump seed. */
   bump: number;
 };
@@ -135,6 +139,7 @@ export function getSubscriptionAccountEncoder(): FixedSizeEncoder<SubscriptionAc
       ["createdAt", getI64Encoder()],
       ["status", getSubscriptionStatusEncoder()],
       ["paymentsMade", getU32Encoder()],
+      ["maxBillingCycles", getU64Encoder()],
       ["bump", getU8Encoder()],
     ]),
     (value) => ({
@@ -160,6 +165,7 @@ export function getSubscriptionAccountDecoder(): FixedSizeDecoder<SubscriptionAc
     ["createdAt", getI64Decoder()],
     ["status", getSubscriptionStatusDecoder()],
     ["paymentsMade", getU32Decoder()],
+    ["maxBillingCycles", getU64Decoder()],
     ["bump", getU8Decoder()],
   ]);
 }
@@ -245,5 +251,5 @@ export async function fetchAllMaybeSubscriptionAccount(
 }
 
 export function getSubscriptionAccountSize(): number {
-  return 190;
+  return 198;
 }
