@@ -21,22 +21,30 @@ import {
   getCreatePlanInstructionAsync,
   getCreateSubscriptionInstructionAsync,
   getInitializeServiceInstructionAsync,
+  getCancelSubscriptionInstruction,
   type PlanAccount,
   type ServiceAccount,
   type SubscriptionAccount,
 } from "../generated/solbill";
 
+export type PlanWithAddress = PlanAccount & { address: Address };
+export type ServiceWithAddress = ServiceAccount & { address: Address };
+
+const ASSOCIATED_TOKEN_PROGRAM_ID =
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" as Address;
+const TOKEN_PROGRAM_ID =
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address;
+
 export function useSolbill() {
   const { wallet, status } = useWalletConnection();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const client = useSolanaClient() as any;
+  const client = useSolanaClient();
   const { send, isSending } = useSendTransaction();
 
   const [loading, setLoading] = useState(false);
-  const [service, setService] = useState<ServiceAccount | null>(null);
-  const [plans, setPlans] = useState<PlanAccount[]>([]);
+  const [service, setService] = useState<ServiceWithAddress | null>(null);
+  const [plans, setPlans] = useState<PlanWithAddress[]>([]);
   const [userSubscriptions, setUserSubscriptions] = useState<
-    Array<{ plan: Address; account: SubscriptionAccount }>
+    Array<{ plan: Address; account: SubscriptionAccount; address: Address }>
   >([]);
   const [txStatus, setTxStatus] = useState<string | null>(null);
 
@@ -80,8 +88,8 @@ export function useSolbill() {
               115, 117, 98, 115, 99, 114, 105, 112, 116, 105, 111, 110,
             ])
           ), // "subscription"
-          getAddressEncoder().encode(plan),
           getAddressEncoder().encode(subscriber),
+          getAddressEncoder().encode(plan),
         ],
       });
       return pda;
@@ -89,73 +97,126 @@ export function useSolbill() {
     []
   );
 
-  const refresh = useCallback(async () => {
-    if (!walletAddress || !client) return;
-    setLoading(true);
-    try {
-      const serviceAddr = await getServiceAddress(walletAddress);
-      const maybeService = await fetchMaybeServiceAccount(
-        client.rpc,
-        serviceAddr
-      );
+  const refresh = useCallback(
+    async (merchantAuth?: Address) => {
+      const authToUse = merchantAuth || walletAddress;
+      if (!authToUse || !client) return;
+      setLoading(true);
+      try {
+        const serviceAddr = await getServiceAddress(authToUse);
+        const maybeService = await fetchMaybeServiceAccount(
+          client.runtime.rpc,
+          serviceAddr
+        );
 
-      if (maybeService.exists) {
-        setService(maybeService.data);
+        if (maybeService.exists) {
+          setService({ ...maybeService.data, address: serviceAddr });
 
-        // Fetch plans
-        const planAddresses: Address[] = [];
-        for (let i = 0; i < Number(maybeService.data.planCount); i++) {
-          planAddresses.push(await getPlanAddress(serviceAddr, i));
-        }
-
-        if (planAddresses.length > 0) {
-          const allPlans = await fetchAllPlanAccount(client.rpc, planAddresses);
-          const pData = allPlans.map((p) => p.data);
-          setPlans(pData);
-
-          // Fetch user subscriptions for these plans
-          const subAddresses: Address[] = [];
-          for (const p of planAddresses) {
-            subAddresses.push(await getSubscriptionAddress(p, walletAddress));
+          // Fetch plans
+          const planAddresses: Address[] = [];
+          for (let i = 0; i < Number(maybeService.data.planCount); i++) {
+            planAddresses.push(await getPlanAddress(serviceAddr, i));
           }
-          const allSubs = await fetchAllMaybeSubscriptionAccount(
-            client.rpc,
-            subAddresses
-          );
-          const activeSubs: Array<{
-            plan: Address;
-            account: SubscriptionAccount;
-          }> = [];
-          for (let i = 0; i < allSubs.length; i++) {
-            const sub = allSubs[i];
-            if (sub.exists) {
-              activeSubs.push({
-                plan: planAddresses[i],
-                account: sub.data,
-              });
+
+          if (planAddresses.length > 0) {
+            const allPlans = await fetchAllPlanAccount(
+              client.runtime.rpc,
+              planAddresses
+            );
+            const pData = allPlans.map((p, i) => ({
+              ...p.data,
+              address: planAddresses[i],
+            }));
+            setPlans(pData);
+
+            // Fetch user subscriptions for these plans
+            if (walletAddress) {
+              const subAddresses: Address[] = [];
+              for (const p of planAddresses) {
+                subAddresses.push(
+                  await getSubscriptionAddress(p, walletAddress)
+                );
+              }
+              const allSubs = await fetchAllMaybeSubscriptionAccount(
+                client.runtime.rpc,
+                subAddresses
+              );
+              const activeSubs: Array<{
+                plan: Address;
+                account: SubscriptionAccount;
+                address: Address;
+              }> = [];
+              for (let i = 0; i < allSubs.length; i++) {
+                const sub = allSubs[i];
+                if (sub.exists) {
+                  activeSubs.push({
+                    plan: planAddresses[i],
+                    account: sub.data,
+                    address: subAddresses[i],
+                  });
+                }
+              }
+              setUserSubscriptions(activeSubs);
+            } else {
+              setUserSubscriptions([]);
             }
+          } else {
+            setPlans([]);
+            setUserSubscriptions([]);
           }
-          setUserSubscriptions(activeSubs);
         } else {
+          setService(null);
           setPlans([]);
-          setUserSubscriptions([]);
         }
-      } else {
-        setService(null);
-        setPlans([]);
+      } catch (e) {
+        console.error("Failed to fetch SolBill data:", e);
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.error("Failed to fetch SolBill data:", e);
-    } finally {
-      setLoading(false);
+    },
+    [
+      walletAddress,
+      client,
+      getServiceAddress,
+      getPlanAddress,
+      getSubscriptionAddress,
+    ]
+  );
+
+  const getAssociatedTokenAddress = useCallback(
+    async (mint: Address, owner: Address) => {
+      const [pda] = await getProgramDerivedAddress({
+        programAddress: ASSOCIATED_TOKEN_PROGRAM_ID,
+        seeds: [
+          getAddressEncoder().encode(owner),
+          getAddressEncoder().encode(TOKEN_PROGRAM_ID),
+          getAddressEncoder().encode(mint),
+        ],
+      });
+      return pda;
+    },
+    []
+  );
+
+  const pollForAccount = async (
+    address: Address,
+    maxAttempts = 10,
+    delayMs = 1000
+  ) => {
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        if (!client) return false;
+        const info = await client.runtime.rpc.getAccountInfo(address).send();
+        if (info && info.value !== null) {
+          return true;
+        }
+      } catch {
+        // ignore
+      }
+      await new Promise((r) => setTimeout(r, delayMs));
     }
-  }, [
-    walletAddress,
-    client,
-    getServiceAddress,
-    getPlanAddress,
-    getSubscriptionAddress,
-  ]);
+    return false;
+  };
 
   useEffect(() => {
     if (status === "connected") {
@@ -177,7 +238,12 @@ export function useSolbill() {
         treasury,
       });
       const signature = await send({ instructions: [instruction] });
-      setTxStatus(`Service initialized! ${signature?.slice(0, 10)}...`);
+      setTxStatus(`Service initialized! Syncing...`);
+      const serviceAddr = await getServiceAddress(
+        wallet.account.address as Address
+      );
+      await pollForAccount(serviceAddr);
+      await new Promise((r) => setTimeout(r, 1000));
       await refresh();
       return signature;
     } catch (err) {
@@ -208,7 +274,9 @@ export function useSolbill() {
         ...args,
       });
       const signature = await send({ instructions: [instruction] });
-      setTxStatus(`Plan created! ${signature?.slice(0, 10)}...`);
+      setTxStatus(`Plan created! Syncing...`);
+      await pollForAccount(planAddr);
+      await new Promise((r) => setTimeout(r, 1000));
       await refresh();
       return signature;
     } catch (err) {
@@ -242,7 +310,42 @@ export function useSolbill() {
         treasury: service.treasury,
       });
       const signature = await send({ instructions: [instruction] });
-      setTxStatus(`Subscription successful! ${signature?.slice(0, 10)}...`);
+      setTxStatus(`Subscription successful! Syncing...`);
+      await pollForAccount(subscriptionAddr);
+      await new Promise((r) => setTimeout(r, 1000));
+      await refresh();
+      return signature;
+    } catch (err) {
+      setTxStatus(
+        `Error: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+      throw err;
+    }
+  };
+
+  const cancelSubscription = async (
+    plan: Address,
+    subscriptionAccount: Address
+  ) => {
+    if (!wallet || !service) return;
+    try {
+      setTxStatus("Canceling subscription...");
+      const serviceAddr = await getServiceAddress(service.authority as Address);
+
+      const instruction = getCancelSubscriptionInstruction({
+        subscriber: wallet.account as unknown as TransactionSigner,
+        service: serviceAddr,
+        subscription: subscriptionAccount,
+        subscriberTokenAccount: await getAssociatedTokenAddress(
+          service.acceptedMint,
+          walletAddress!
+        ),
+      });
+
+      const signature = await send({ instructions: [instruction] });
+      setTxStatus(`Subscription canceled! Syncing...`);
+      // Sleep for 2.5 seconds to allow RPC to drop the deleted account before refresh
+      await new Promise((resolve) => setTimeout(resolve, 2500));
       await refresh();
       return signature;
     } catch (err) {
@@ -265,5 +368,7 @@ export function useSolbill() {
     initializeService,
     createPlan,
     createSubscription,
+    cancelSubscription,
+    getAssociatedTokenAddress,
   };
 }

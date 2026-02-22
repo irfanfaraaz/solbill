@@ -14,7 +14,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { useSolbill } from "../../lib/use-solbill";
+import { CreatePlanModal } from "./CreatePlanModal";
+import { useSolbill, type PlanWithAddress } from "../../lib/use-solbill";
 import type {
   PlanAccount,
   ServiceAccount,
@@ -28,6 +29,13 @@ const LoadingSpinner = () => (
   </div>
 );
 
+const formatAmount = (amount: bigint | number, mint?: string) => {
+  if (mint === "So11111111111111111111111111111111111111112") {
+    return `${Number(amount) / 1e9} SOL`;
+  }
+  return `${Number(amount) / 1e6} USDC`;
+};
+
 const MerchantView = ({
   service,
   plans,
@@ -38,11 +46,15 @@ const MerchantView = ({
 }: {
   service: ServiceAccount | null;
   plans: PlanAccount[];
-  onInitialize: () => void;
+  onInitialize: (mint: Address) => void;
   onCreatePlan: () => void;
   loading: boolean;
   isSending: boolean;
 }) => {
+  const [selectedMint, setSelectedMint] = useState<Address>(
+    "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" as Address
+  );
+
   if (loading) return <LoadingSpinner />;
 
   if (!service) {
@@ -64,13 +76,32 @@ const MerchantView = ({
             subscription plans.
           </p>
         </div>
-        <button
-          onClick={onInitialize}
-          disabled={isSending}
-          className="flex items-center gap-2 rounded-full bg-primary px-8 py-3 font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50 cursor-pointer"
-        >
-          {isSending ? "Initializing..." : "Initialize Service"}
-        </button>
+        <div className="space-y-4 w-full max-w-sm">
+          <div className="flex flex-col text-left space-y-1.5 w-full">
+            <label className="text-sm font-medium text-foreground">
+              Select Payment Token
+            </label>
+            <select
+              value={selectedMint}
+              onChange={(e) => setSelectedMint(e.target.value as Address)}
+              className="w-full rounded-xl border border-border-low bg-background px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <option value="4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU">
+                Devnet USDC
+              </option>
+              <option value="So11111111111111111111111111111111111111112">
+                Native Solana (WSOL)
+              </option>
+            </select>
+          </div>
+          <button
+            onClick={() => onInitialize(selectedMint)}
+            disabled={isSending}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+          >
+            {isSending ? "Initializing..." : "Initialize Service"}
+          </button>
+        </div>
       </motion.div>
     );
   }
@@ -92,7 +123,7 @@ const MerchantView = ({
         </div>
         <button
           onClick={onCreatePlan}
-          className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/20 cursor-pointer"
+          className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           Create Plan
@@ -134,7 +165,7 @@ const MerchantView = ({
               </div>
               <div className="mt-6 flex items-baseline gap-1">
                 <span className="text-2xl font-bold tracking-tight text-foreground">
-                  {Number(plan.amount) / 10 ** 6} USDC
+                  {formatAmount(plan.amount, service?.acceptedMint?.toString())}
                 </span>
                 <span className="text-sm text-muted">/ term</span>
               </div>
@@ -159,17 +190,63 @@ const MerchantView = ({
 };
 
 const SubscriberView = ({
+  allPlans,
   subscriptions,
   loading,
+  onSubscribe,
+  onCancelSubscription,
+  serviceMint,
 }: {
-  subscriptions: Array<{ plan: Address; account: SubscriptionAccount }>;
+  allPlans: PlanWithAddress[];
+  subscriptions: Array<{
+    plan: Address;
+    account: SubscriptionAccount;
+    address: Address;
+  }>;
   loading: boolean;
+  onSubscribe: (plan: Address) => void;
+  onCancelSubscription: (plan: Address, subscription: Address) => void;
+  serviceMint?: string;
 }) => {
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
+        <h3 className="text-xl font-bold text-foreground">Available Plans</h3>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {allPlans.map((plan, i) => {
+          const isSubscribed = subscriptions.some(
+            (s) => s.plan === plan.address
+          );
+          return (
+            <div
+              key={i}
+              className="flex flex-col rounded-2xl border border-border-low bg-card p-6 shadow-sm"
+            >
+              <h4 className="font-bold text-foreground">
+                {new TextDecoder()
+                  .decode(new Uint8Array(Object.values(plan.name)))
+                  .replace(/\0/g, "")}
+              </h4>
+              <p className="mt-2 text-2xl font-bold">
+                {formatAmount(plan.amount, serviceMint)}
+              </p>
+              <button
+                disabled={isSubscribed}
+                onClick={() => onSubscribe(plan.address)}
+                className="mt-6 rounded-xl bg-blue-600 py-2 text-white font-semibold disabled:opacity-50 transition hover:bg-blue-700 cursor-pointer"
+              >
+                {isSubscribed ? "Subscribed" : "Subscribe Now"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between mt-10">
         <h3 className="text-xl font-bold text-foreground">My Subscriptions</h3>
       </div>
 
@@ -217,11 +294,23 @@ const SubscriberView = ({
                     Amount
                   </p>
                   <p className="font-bold text-foreground">
-                    {Number(sub.account.amount) / 10 ** 6} USDC
+                    {formatAmount(sub.account.amount, serviceMint)}
                   </p>
                 </div>
-                <button className="text-xs font-semibold text-primary hover:underline">
-                  Manage
+                <button
+                  disabled={loading}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Are you sure you want to cancel this subscription?"
+                      )
+                    ) {
+                      onCancelSubscription(sub.plan, sub.address);
+                    }
+                  }}
+                  className="text-xs font-semibold text-red-500 hover:text-red-600 hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
@@ -239,23 +328,45 @@ export function SolBill() {
   const [activeTab, setActiveTab] = useState<"merchant" | "subscriber">(
     "subscriber"
   );
+  const [isPlanModalOpen, setPlanModalOpen] = useState(false);
+  const [lookupAddress, setLookupAddress] = useState("");
 
-  // Mock handlers - in reality we'd show a modal
-  const handleInitializeService = async () => {
-    const mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" as Address; // USDC devnet placeholder
-    const treasury = solbill.walletAddress!; // Placeholder
+  // Handlers
+  const handleInitializeService = async (mint: Address) => {
+    const treasury = await solbill.getAssociatedTokenAddress(
+      mint,
+      solbill.walletAddress!
+    );
     await solbill.initializeService(mint, treasury);
+    await solbill.refresh();
   };
 
-  const handleCreatePlan = async () => {
-    await solbill.createPlan({
-      name: "SolBill Premium",
-      amount: 10_000_000n, // 10 USDC
-      interval: 2592000n, // 30 days
-      crankReward: 500_000n, // 0.5 USDC
-      gracePeriod: 604800n, // 7 days
-      maxBillingCycles: 0n, // Infinite
-    });
+  const handleCreatePlan = async (args: {
+    name: string;
+    amount: number | bigint;
+    crankReward: number | bigint;
+    interval: number | bigint;
+    gracePeriod: number | bigint;
+    maxBillingCycles: number | bigint;
+  }) => {
+    await solbill.createPlan(args);
+    setPlanModalOpen(false);
+  };
+
+  const handleSubscribe = async (plan: Address) => {
+    if (!solbill.service) return;
+    const subscriberAta = await solbill.getAssociatedTokenAddress(
+      solbill.service.acceptedMint,
+      solbill.walletAddress!
+    );
+    await solbill.createSubscription(plan, subscriberAta);
+  };
+
+  const handleCancelSubscription = async (
+    plan: Address,
+    subscription: Address
+  ) => {
+    await solbill.cancelSubscription(plan, subscription);
   };
 
   if (status !== "connected") {
@@ -318,17 +429,56 @@ export function SolBill() {
               loading={solbill.loading}
               isSending={solbill.isSending}
               onInitialize={handleInitializeService}
-              onCreatePlan={handleCreatePlan}
+              onCreatePlan={() => setPlanModalOpen(true)}
             />
           ) : (
-            <SubscriberView
-              key="subscriber"
-              subscriptions={solbill.userSubscriptions}
-              loading={solbill.loading}
-            />
+            <div className="space-y-6">
+              {!solbill.service && (
+                <div className="flex flex-col space-y-2 rounded-2xl border border-border-low bg-card p-6 shadow-sm">
+                  <h4 className="font-semibold text-foreground">
+                    Browse Merchant
+                  </h4>
+                  <p className="text-xs text-muted">
+                    Enter the merchant&apos;s authority address to view their
+                    plans.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Merchant Solana Address"
+                      className="flex-1 rounded-xl border border-border-low bg-background px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={lookupAddress}
+                      onChange={(e) => setLookupAddress(e.target.value)}
+                    />
+                    <button
+                      onClick={() => solbill.refresh(lookupAddress as Address)}
+                      className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 transition"
+                    >
+                      Lookup
+                    </button>
+                  </div>
+                </div>
+              )}
+              <SubscriberView
+                key="subscriber"
+                allPlans={solbill.plans}
+                subscriptions={solbill.userSubscriptions}
+                loading={solbill.loading || solbill.isSending}
+                onSubscribe={handleSubscribe}
+                onCancelSubscription={handleCancelSubscription}
+                serviceMint={solbill.service?.acceptedMint?.toString()}
+              />
+            </div>
           )}
         </div>
       </AnimatePresence>
+
+      <CreatePlanModal
+        isOpen={isPlanModalOpen}
+        onClose={() => setPlanModalOpen(false)}
+        onSubmit={handleCreatePlan}
+        isSending={solbill.isSending}
+      />
 
       {(solbill.txStatus || solbill.loading) && (
         <motion.div
