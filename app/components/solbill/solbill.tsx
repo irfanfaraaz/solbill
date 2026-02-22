@@ -16,6 +16,7 @@ import {
 import { cn } from "../../lib/utils";
 import { CreatePlanModal } from "./CreatePlanModal";
 import { useSolbill, type PlanWithAddress } from "../../lib/use-solbill";
+import { USDC_MINT, SOL_MINT } from "../../lib/solbill-config";
 import type {
   PlanAccount,
   ServiceAccount,
@@ -30,7 +31,7 @@ const LoadingSpinner = () => (
 );
 
 const formatAmount = (amount: bigint | number, mint?: string) => {
-  if (mint === "So11111111111111111111111111111111111111112") {
+  if (mint === SOL_MINT) {
     return `${Number(amount) / 1e9} SOL`;
   }
   return `${Number(amount) / 1e6} USDC`;
@@ -86,12 +87,8 @@ const MerchantView = ({
               onChange={(e) => setSelectedMint(e.target.value as Address)}
               className="w-full rounded-xl border border-border-low bg-background px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
-              <option value="4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU">
-                Devnet USDC
-              </option>
-              <option value="So11111111111111111111111111111111111111112">
-                Native Solana (WSOL)
-              </option>
+              <option value={USDC_MINT}>Devnet USDC</option>
+              <option value={SOL_MINT}>Native Solana (WSOL)</option>
             </select>
           </div>
           <button

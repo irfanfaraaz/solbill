@@ -12,8 +12,9 @@ import {
 } from "../generated/solbill";
 import { NextResponse, type NextRequest } from "next/server";
 
-const RPC_ENDPOINT =
-  process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com";
+import { SOLANA_RPC_URL } from "./solbill-config";
+
+const RPC_ENDPOINT = SOLANA_RPC_URL;
 
 /**
  * Unified Billing Middleware for SolBill
@@ -82,7 +83,7 @@ export function withSolbill(
       );
 
       return await x402Handler(req);
-    } catch (e) {
+    } catch {
       console.warn(
         "SolBill Middleware: x402 middleware failed (likely reachability). Returning manual 402 challenge."
       );

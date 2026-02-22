@@ -14,7 +14,6 @@ import {
   type TransactionSigner,
 } from "@solana/kit";
 import {
-  SOLBILL_PROGRAM_ADDRESS,
   fetchMaybeServiceAccount,
   fetchAllPlanAccount,
   fetchAllMaybeSubscriptionAccount,
@@ -26,6 +25,7 @@ import {
   type ServiceAccount,
   type SubscriptionAccount,
 } from "../generated/solbill";
+import { SOLBILL_PROGRAM_ID } from "./solbill-config";
 
 export type PlanWithAddress = PlanAccount & { address: Address };
 export type ServiceWithAddress = ServiceAccount & { address: Address };
@@ -52,7 +52,7 @@ export function useSolbill() {
 
   const getServiceAddress = useCallback(async (authority: Address) => {
     const [pda] = await getProgramDerivedAddress({
-      programAddress: SOLBILL_PROGRAM_ADDRESS,
+      programAddress: SOLBILL_PROGRAM_ID,
       seeds: [
         getBytesEncoder().encode(
           new Uint8Array([115, 101, 114, 118, 105, 99, 101])
@@ -66,7 +66,7 @@ export function useSolbill() {
   const getPlanAddress = useCallback(
     async (serviceAddr: Address, index: number) => {
       const [pda] = await getProgramDerivedAddress({
-        programAddress: SOLBILL_PROGRAM_ADDRESS,
+        programAddress: SOLBILL_PROGRAM_ID,
         seeds: [
           getBytesEncoder().encode(new Uint8Array([112, 108, 97, 110])), // "plan"
           getAddressEncoder().encode(serviceAddr),
@@ -81,7 +81,7 @@ export function useSolbill() {
   const getSubscriptionAddress = useCallback(
     async (plan: Address, subscriber: Address) => {
       const [pda] = await getProgramDerivedAddress({
-        programAddress: SOLBILL_PROGRAM_ADDRESS,
+        programAddress: SOLBILL_PROGRAM_ID,
         seeds: [
           getBytesEncoder().encode(
             new Uint8Array([

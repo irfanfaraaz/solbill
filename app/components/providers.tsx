@@ -5,8 +5,10 @@ import { PropsWithChildren } from "react";
 
 import { autoDiscover, createClient } from "@solana/client";
 
+import { SOLANA_RPC_URL } from "../lib/solbill-config";
+
 const client = createClient({
-  endpoint: "https://api.devnet.solana.com",
+  endpoint: SOLANA_RPC_URL,
   walletConnectors: autoDiscover(),
 });
 
