@@ -1,26 +1,59 @@
 # SolBill: Autonomous Recurring Billing Engine
 
-SolBill is a production-grade, non-custodial recurring billing protocol built on Solana. It reimagines traditional Web2 subscription systems (like Stripe) as a transparent, on-chain autonomous ecosystem.
+SolBill is a production-grade, non-custodial recurring billing protocol built on Solana. It reimagines traditional Web2 subscription systems (like Stripe) as a transparent, on-chain autonomous ecosystem. It features an on-chain task queue, price protection, and a unique **Unified Billing Gateway** via x402 integration.
 
 ---
 
-## 🚀 Key Features
+## 🎯 The "Rebuilding Web2" Thesis
 
-- **Autonomous Billing**: Payments are collected automatically by a network of incentivized "Crankers" (bots).
-- **Flexible Billing Cycles**: Supports **Infinite** recurring subscriptions, **Fixed-Term** installments (e.g., 12 months), and **One-Time** lifetime purchases.
-- **Pay Upfront**: Every subscription triggers an immediate first payment at the moment of creation.
-- **Merchant-First Design**: Merchants define their treasury, accepted tokens (USDC/SOL/any SPL), and custom billing intervals.
-- **Permissionless Bounties**: Every plan includes a `crank_reward`. Anyone who triggers a due payment receives a bounty.
-- **Non-Custodial**: Funds move directly from Subscriber to Merchant via delegated authority. SolBill never "holds" user funds.
-- **Stack-Optimized**: Engineered with low-stack footprints and zero-copy patterns for maximum reliability on Solana.
+In Web2, subscriptions operate on a centralized "Pull" model: a company stores your payment details and triggers a private cron job to charge your card.
+
+**SolBill** rebuilds this entire system on Solana:
+
+- **The "Rules"** live on-chain as a deterministic Solana Program.
+- **The "Queue"** (which payments are due) is public, auditable on-chain state.
+- **The "Worker"** is a lightweight, incentivized script anybody can run.
+- **The "Control"** rests entirely with the user via token delegations.
+
+---
+
+## 🔁 The Billing Lifecycle (How it Works)
+
+The features of SolBill are best understood sequentially through the lifecycle of a subscription.
+
+### 1. Merchant Setup: Merchant-First Design
+
+Merchants create a `Service` on-chain, defining their own treasury wallet and the SPL token they accept (e.g., Devnet USDC or Native SOL).
+
+### 2. Plan Creation: Flexible Billing Cycles
+
+The merchant generates subscription `Plans` with customizable rules:
+
+- **Infinite**: Traditional recurring subscriptions (e.g., monthly).
+- **Fixed-Term**: Installment plans that auto-terminate (e.g., 12 months).
+- **One-Time**: Lifetime proxy purchases.
+
+### 3. User Subscription: Non-Custodial & Secure
+
+A user subscribes to a plan by delegating exactly the monthly amount to the `Subscription` PDA via the SPL Token Program. SolBill never takes custody of user funds; they move directly from Subscriber to Merchant Treasury.
+
+### 4. Price Protection: Enforced Grandfathering
+
+At the moment of subscription, the user's price is **locked on-chain for life**. If the merchant later hikes the price of the plan, existing subscribers remain protected indefinitely.
+
+### 5. Payment Collection: Autonomous Cranking & Permissionless Bounties
+
+When a subscription's `next_billing_timestamp` is reached, it enters the public queue. Any bot or user can execute the `collect_payment` instruction. The program mathematically enforces the collection block time and pays the executor a fixed **Crank Reward** (bounty) instantly.
+
+### 6. Premium Access: Unified Billing Gateway (x402)
+
+SolBill integrates with the **x402** protocol to provide a hybrid premium gateway. Active subscribers transparently bypass usage-based paywalls. If a user cancels (or isn't subscribed), the gateway falls back to requiring micro-payments via the standard 402 HTTP challenge.
 
 ---
 
 ## 🏗 Architecture Analysis: Web2 vs. Solana
 
-This project is a submission for the **Superteam "Rebuild a Backend System as a Solana Program"** bounty. We have reframed the "Subscription Billing + Task Queue" model into an on-chain architecture.
-
-### 1. Comparative Analysis
+### 1. Simple Comparison
 
 | Feature        | Web2 (Stripe + SQS)                  | SolBill (Solana)                          |
 | :------------- | :----------------------------------- | :---------------------------------------- |
@@ -28,11 +61,12 @@ This project is a submission for the **Superteam "Rebuild a Backend System as a 
 | **Trust**      | Users trust Stripe/Bank.             | Users trust **Open-Source Code**.         |
 | **Control**    | Dark patterns in cancellation.       | **Instant Revocation** via Token Program. |
 | **Automation** | Private Cron Jobs (Stripe Internal). | **Incentivized Cranks** (Permissionless). |
+| **Fairness**   | Merchants can hike prices anytime.   | **Enforced Grandfathering** on-chain.     |
 | **Fees**       | 2.9% + $0.30 per transaction.        | ~$0.00025 + optional bounty.              |
 
-### 2. The Account Model (On-Chain Queue)
+### 2. The Account Model (On-Chain State Machine)
 
-SolBill treats Solana as a **Distributed State Machine**. The "Queue" of what needs to be charged is stored entirely in Program Derived Addresses (PDAs):
+SolBill acts as a state machine. Instead of a database, the relationships are stored in Program Derived Addresses (PDAs):
 
 ```mermaid
 graph TD
@@ -40,56 +74,89 @@ graph TD
     SA --- P1[Plan Account]
     U[Subscriber Wallet] --- Sub[Subscription Account PDA]
     Sub --- P1
-    Sub -.->|Authority| TA[Subscriber Token Account]
-    P1 -.->|Payout| TR[Merchant Treasury]
-    P1 -.->|Bounty| CR[Cranker Wallet]
+    Sub -.->|Delegation Authority| TA[Subscriber Token Account]
+    P1 -.->|Payout Destination| TR[Merchant Treasury]
+    P1 -.->|Incentive Payout| CR[Cranker Wallet]
 ```
 
-- **ServiceAccount**: Root merchant configuration.
-- **PlanAccount**: Template for billing (Price, Interval, Max Cycles).
-- **SubscriptionAccount**: The live relationship. Stores `next_billing_timestamp` and `billing_cycle_count`.
+### 3. Unified Billing Gateway (x402 Flow)
 
----
+```mermaid
+sequenceDiagram
+    participant User
+    participant Gateway as x402 Middleware
+    participant SolBill as SolBill Program
+    participant API as Merchant API
 
-## 📖 How it Works (The Lifecycle)
-
-1. **Merchant Setup**: A merchant initializes a `ServiceAccount` and defines `PlanAccounts`.
-2. **Subscribe**: A user selects a plan. They pay the first month **upfront** and call `approve` on the Token Program, delegating permission to the Subscription PDA to pull future payments.
-3. **The Crank**:
-   - The `collect_payment` instruction enforces timing rules: `require!(clock.now >= next_billing)`.
-   - If the plan is **Fixed-Term** or **One-Time**, the program automatically blocks additional billing once `cycle_count >= max_cycles`.
-   - If the payment succeeds, the Cranker receives the `crank_reward` bounty instantly.
-
----
-
-## 📁 Project Structure
-
-```text
-├── anchor/
-│   ├── programs/solbill/      # Core Program Logic (Rust)
-│   │   ├── instructions/      # Modular handlers (Stack-optimized)
-│   │   └── state/             # Account schemas (InitSpace included)
-│   └── tests/                 # LiteSVM simulations (Billing cycles)
-├── app/
-│   ├── components/solbill/    # Premium Dashboard UI
-│   └── generated/solbill/     # TypeScript SDK
-└── scripts/
-    └── worker.ts              # Cranker Bot (Bounty Hunter)
+    User->>Gateway: Request /api/premium
+    Gateway->>SolBill: Check Subscription Status
+    alt Active Subscriber
+        SolBill-->>Gateway: Valid (Bypass Payload)
+        Gateway->>API: Forward Request
+        API-->>User: 200 OK (Full Content)
+    else No Subscription / Cancelled
+        Gateway-->>User: 402 Payment Required (Usage-based challenge)
+    end
 ```
 
 ---
 
-## ⚙️ Deployment & Demo
+## 🛠 Technical Stack & Optimizations
 
-**Program ID**: `AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx`
+- **Core Program**: Built in Rust with **Anchor**, utilizing zero-copy patterns and modular instruction handlers for tight compute-unit execution.
+- **Client SDK**: Autogenerated via **Codama** (formerly Kinobi) directly from the IDL for bulletproof, type-safe TypeScript interfaces.
+- **Frontend App**: Next.js 15, Tailwind CSS, and the `@solana/wallet-adapter` suite.
+- **Automation Worker**: A Node.js TypeScript script using `@solana/web3.js` `getProgramAccounts` filters to act as a permissionless bounty hunter.
+- **Middleware**: Customized `x402-next` interceptor for evaluating on-chain subscription PDA status dynamically at the edge.
 
-### Devnet Simulation
+---
 
-Our test suite uses `LiteSVM` to simulate years of billing in milliseconds, verifying:
+## ⚙️ Getting Started & Testing
 
-- **Upfront Payments**: Ensured at subscription.
-- **Finite Billing**: 1/1 (One-time) or X/X (Installment) enforcement.
-- **Cranker Incentives**: Mathematical precision of bounty payouts.
+### 1. Environment Configuration
+
+Copy the template and fill in your RPC and Program IDs (Defaults to our Devnet deployment):
+
+```bash
+cp .env.example .env
+```
+
+### 2. Running Locally
+
+```bash
+# Install dependencies
+npm install
+
+# Build the Anchor program
+npm run anchor-build
+
+# Start the frontend
+npm run dev
+```
+
+### 3. Running the Cranker Bot
+
+Open a split terminal. Once you create a subscription on the frontend, this bot will hunt for the due payment and claim the bounty:
+
+```bash
+npm run crank
+```
+
+---
+
+## 📜 Submission Manifest
+
+- **Program ID**: `AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx`
+- **Network**: Solana Devnet
+- **Verification**: [Solana Explorer](https://explorer.solana.com/address/AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx?cluster=devnet)
+
+### Key Transaction Simulations (LiteSVM Local Testing)
+
+Our test suite simulates years of billing in milliseconds locally (`anchor test --skip-deploy`). We explicitly verify:
+
+- **Price Integrity**: Ensuring Grandfathering locks are strictly enforced regardless of merchant actions.
+- **Cycle Enforcement**: Validating exactly 1/1 (One-time) or X/X (Installment) limits are not bypassed.
+- **Bounty Payouts**: Zero-slippage bounty token transfers to crankers.
 
 ---
 
