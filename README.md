@@ -1,142 +1,78 @@
-# SolBill: Autonomous Recurring Billing Engine
+# SolBill: The Decentralized SaaS Billing Platform
 
-SolBill is a production-grade, non-custodial recurring billing protocol built on Solana. It reimagines traditional Web2 subscription systems (like Stripe) as a transparent, on-chain autonomous ecosystem. It features an on-chain task queue, price protection, and a unique **Unified Billing Gateway** via x402 integration.
+SolBill is a complete, production-ready recurring billing platform built natively on Solana. It empowers creators, developers, and businesses to launch subscription-based services, manage pricing plans, and collect payments entirely on-chain.
 
----
-
-## 🎯 The "Rebuilding Web2" Thesis
-
-In Web2, subscriptions operate on a centralized "Pull" model: a company stores your payment details and triggers a private cron job to charge your card.
-
-**SolBill** rebuilds this entire system on Solana:
-
-- **The "Rules"** live on-chain as a deterministic Solana Program.
-- **The "Queue"** (which payments are due) is public, auditable on-chain state.
-- **The "Worker"** is a lightweight, incentivized script anybody can run.
-- **The "Control"** rests entirely with the user via token delegations.
+By leveraging Solana's speed and low fees, SolBill provides a seamless checkout experience for users while giving merchants powerful tools to monetize their content without relying on centralized payment processors like Stripe.
 
 ---
 
-## 🔁 The Billing Lifecycle (How it Works)
+## ✨ Why SolBill?
 
-The features of SolBill are best understood sequentially through the lifecycle of a subscription.
+### For Merchants
 
-### 1. Merchant Setup: Merchant-First Design
+- **Zero Platform Fees**: Keep 100% of your revenue. Transactions are settled peer-to-peer.
+- **Merchant Dashboard**: A comprehensive interface to initialize your service, create customizable pricing plans, and monitor active subscriptions.
+- **Flexible Billing Cycles**: Create Infinite recurring plans, Fixed-Term installments (e.g., a 12-month course), or One-Time lifetime access passes.
+- **Multi-Token Support**: Accept payments in Native SOL, USDC, or any other SPL token directly to your treasury wallet.
+- **Unified Premium Gateway (x402)**: Seamlessly gate your API or content. SolBill intercepts requests, bypassing paywalls for active subscribers and prompting micro-payments for guests.
 
-Merchants create a `Service` on-chain, defining their own treasury wallet and the SPL token they accept (e.g., Devnet USDC or Native SOL).
+### For Subscribers
 
-### 2. Plan Creation: Flexible Billing Cycles
-
-The merchant generates subscription `Plans` with customizable rules:
-
-- **Infinite**: Traditional recurring subscriptions (e.g., monthly).
-- **Fixed-Term**: Installment plans that auto-terminate (e.g., 12 months).
-- **One-Time**: Lifetime proxy purchases.
-
-### 3. User Subscription: Non-Custodial & Secure
-
-A user subscribes to a plan by delegating exactly the monthly amount to the `Subscription` PDA via the SPL Token Program. SolBill never takes custody of user funds; they move directly from Subscriber to Merchant Treasury.
-
-### 4. Price Protection: Enforced Grandfathering
-
-At the moment of subscription, the user's price is **locked on-chain for life**. If the merchant later hikes the price of the plan, existing subscribers remain protected indefinitely.
-
-### 5. Payment Collection: Autonomous Cranking & Permissionless Bounties
-
-When a subscription's `next_billing_timestamp` is reached, it enters the public queue. Any bot or user can execute the `collect_payment` instruction. The program mathematically enforces the collection block time and pays the executor a fixed **Crank Reward** (bounty) instantly.
-
-### 6. Premium Access: Unified Billing Gateway (x402)
-
-SolBill integrates with the **x402** protocol to provide a hybrid premium gateway. Active subscribers transparently bypass usage-based paywalls. If a user cancels (or isn't subscribed), the gateway falls back to requiring micro-payments via the standard 402 HTTP challenge.
+- **Subscriber Dashboard**: A single modern portal to view all your active subscriptions, check upcoming payment dates, and manage your plans.
+- **Total Control**: Subscriptions are non-custodial. You delegate exactly what is owed and can cancel instantly with a single transaction—no hidden dark patterns or contacting support.
+- **Price Protection (Grandfathering)**: The price you subscribe at is locked on-chain for the lifetime of your subscription. Even if a merchant raises prices later, you get to keep your original rate.
 
 ---
 
-## 🏗 Architecture Analysis: Web2 vs. Solana
+## 🛠️ How It Works
 
-### 1. Simple Comparison
-
-| Feature        | Web2 (Stripe + SQS)                  | SolBill (Solana)                          |
-| :------------- | :----------------------------------- | :---------------------------------------- |
-| **State**      | Centralized SQL Database.            | On-Chain PDAs (Public & Auditable).       |
-| **Trust**      | Users trust Stripe/Bank.             | Users trust **Open-Source Code**.         |
-| **Control**    | Dark patterns in cancellation.       | **Instant Revocation** via Token Program. |
-| **Automation** | Private Cron Jobs (Stripe Internal). | **Incentivized Cranks** (Permissionless). |
-| **Fairness**   | Merchants can hike prices anytime.   | **Enforced Grandfathering** on-chain.     |
-| **Fees**       | 2.9% + $0.30 per transaction.        | ~$0.00025 + optional bounty.              |
-
-### 2. The Account Model (On-Chain State Machine)
-
-SolBill acts as a state machine. Instead of a database, the relationships are stored in Program Derived Addresses (PDAs):
-
-```mermaid
-graph TD
-    M[Merchant Wallet] --- SA[Service Account PDA]
-    SA --- P1[Plan Account]
-    U[Subscriber Wallet] --- Sub[Subscription Account PDA]
-    Sub --- P1
-    Sub -.->|Delegation Authority| TA[Subscriber Token Account]
-    P1 -.->|Payout Destination| TR[Merchant Treasury]
-    P1 -.->|Incentive Payout| CR[Cranker Wallet]
-```
-
-### 3. Unified Billing Gateway (x402 Flow)
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Gateway as x402 Middleware
-    participant SolBill as SolBill Program
-    participant API as Merchant API
-
-    User->>Gateway: Request /api/premium
-    Gateway->>SolBill: Check Subscription Status
-    alt Active Subscriber
-        SolBill-->>Gateway: Valid (Bypass Payload)
-        Gateway->>API: Forward Request
-        API-->>User: 200 OK (Full Content)
-    else No Subscription / Cancelled
-        Gateway-->>User: 402 Payment Required (Usage-based challenge)
-    end
-```
+1. **Service Setup**: A merchant launches a `Service` and sets up `Plans` (e.g., "Pro Tier: 10 USDC / Month").
+2. **Checkout**: A user connects their wallet, selects a plan, and subscribes. This sets up a secure token delegation locking in their price and billing schedule.
+3. **Automated Payments**: SolBill autonomously handles the recurring billing schedule. When a subscription's `next_billing_timestamp` is reached, it enters the public queue. Any bot or user can execute the `collect_payment` instruction. The program mathematically enforces the collection block time and pays the executor a fixed **Crank Reward** (bounty) instantly, routing the rest directly to the merchant's treasury.
+4. **Content Gating**: The merchant uses the SolBill Middleware to protect their application. Active subscribers are granted transparent access, while non-subscribers are blocked.
 
 ---
 
-## 🛠 Technical Stack & Optimizations
+## 💻 Technical Stack
 
-- **Core Program**: Built in Rust with **Anchor**, utilizing zero-copy patterns and modular instruction handlers for tight compute-unit execution.
-- **Client SDK**: Autogenerated via **Codama** (formerly Kinobi) directly from the IDL for bulletproof, type-safe TypeScript interfaces.
-- **Frontend App**: Next.js 15, Tailwind CSS, and the `@solana/wallet-adapter` suite.
-- **Automation Worker**: A Node.js TypeScript script using `@solana/web3.js` `getProgramAccounts` filters to act as a permissionless bounty hunter.
-- **Middleware**: Customized `x402-next` interceptor for evaluating on-chain subscription PDA status dynamically at the edge.
+SolBill is engineered for maximum reliability, speed, and developer experience.
+
+- **Smart Contracts**: Built with Rust and **Anchor**, utilizing zero-copy account patterns and modular instruction handlers for optimized compute usage.
+- **Frontend App**: Built with Next.js 15, Tailwind CSS, and the `@solana/wallet-adapter` suite for a premium, responsive dashboard experience.
+- **Client SDK**: Autogenerated via **Codama** (formerly Kinobi), providing a bulletproof, type-safe TypeScript interface to interact with the on-chain program.
+- **Middleware**: Integrated with `x402-next` to create a hybrid premium gateway that evaluates on-chain subscription state dynamically at the edge.
+- **Automated Collection Engine**: Background automation to handle recurring scheduled payments seamlessly.
 
 ---
 
-## ⚙️ Getting Started & Testing
+## 🚀 Quick Start Guide
+
+Ready to test SolBill locally? Follow these steps:
 
 ### 1. Environment Configuration
 
-Copy the template and fill in your RPC and Program IDs (Defaults to our Devnet deployment):
+Copy the environment template and configure your RPC and Program IDs:
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. Running Locally
+### 2. Local Development Setup
 
 ```bash
 # Install dependencies
 npm install
 
-# Build the Anchor program
+# Build the Anchor program locally
 npm run anchor-build
 
-# Start the frontend
+# Start the frontend dashboard
 npm run dev
 ```
 
-### 3. Running the Cranker Bot
+### 3. Run the Automation Engine
 
-Open a split terminal. Once you create a subscription on the frontend, this bot will hunt for the due payment and claim the bounty:
+Start the background process to handle recurring payment collections:
 
 ```bash
 npm run crank
@@ -144,22 +80,18 @@ npm run crank
 
 ---
 
-## 📜 Submission Manifest
+## 🏆 Superteam Submission Details
+
+**Submitted for the "Rebuild a Backend System as a Solana Program" Bounty.**
 
 - **Program ID**: `AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx`
 - **Network**: Solana Devnet
-- **Verification**: [Solana Explorer](https://explorer.solana.com/address/AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx?cluster=devnet)
+- **Verification**: [View on Solana Explorer](https://explorer.solana.com/address/AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx?cluster=devnet)
 
-### Key Transaction Simulations (LiteSVM Local Testing)
-
-Our test suite simulates years of billing in milliseconds locally (`anchor test --skip-deploy`). We explicitly verify:
-
-- **Price Integrity**: Ensuring Grandfathering locks are strictly enforced regardless of merchant actions.
-- **Cycle Enforcement**: Validating exactly 1/1 (One-time) or X/X (Installment) limits are not bypassed.
-- **Bounty Payouts**: Zero-slippage bounty token transfers to crankers.
+Our robust, production-ready implementation shifts the complex logic of SaaS billing onto Solana's decentralized architecture. LiteSVM integration tests verify all mathematical edge cases in milliseconds, ensuring absolute stability for variable billing terms.
 
 ---
 
-## 📜 License
+## 📄 License
 
 MIT

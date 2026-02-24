@@ -164,19 +164,31 @@ const MerchantView = ({
                 <span className="text-2xl font-bold tracking-tight text-foreground">
                   {formatAmount(plan.amount, service?.acceptedMint?.toString())}
                 </span>
-                <span className="text-sm text-muted">/ term</span>
+                <span className="text-sm text-muted">
+                  {Number(plan.maxBillingCycles) === 1
+                    ? "/ one-time"
+                    : "/ term"}
+                </span>
               </div>
               <div className="mt-6 flex items-center justify-between border-t border-border-low pt-4 text-xs text-muted">
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> {Number(plan.interval) / 86400}{" "}
-                  days
-                </span>
-                <span className="flex items-center gap-1 text-primary">
-                  <Package className="h-3 w-3" />{" "}
-                  {Number(plan.maxBillingCycles) === 0
-                    ? "Infinite"
-                    : `${plan.maxBillingCycles} cycles`}
-                </span>
+                {Number(plan.maxBillingCycles) === 1 ? (
+                  <span className="flex items-center gap-1 text-primary">
+                    <Package className="h-3 w-3" /> One-Time Purchase
+                  </span>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />{" "}
+                      {Number(plan.interval) / 86400} days
+                    </span>
+                    <span className="flex items-center gap-1 text-primary">
+                      <Package className="h-3 w-3" />{" "}
+                      {Number(plan.maxBillingCycles) === 0
+                        ? "Infinite"
+                        : `${plan.maxBillingCycles} cycles`}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           ))
@@ -230,6 +242,11 @@ const SubscriberView = ({
               </h4>
               <p className="mt-2 text-2xl font-bold">
                 {formatAmount(plan.amount, serviceMint)}
+                <span className="text-sm text-muted font-normal ml-1">
+                  {Number(plan.maxBillingCycles) === 1
+                    ? "/ one-time"
+                    : "/ term"}
+                </span>
               </p>
               <button
                 disabled={isSubscribed}
