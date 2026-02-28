@@ -15,12 +15,15 @@ import {
 } from "@solana/kit";
 import {
   fetchMaybeServiceAccount,
+  fetchServiceAccount,
   fetchAllPlanAccount,
   fetchAllMaybeSubscriptionAccount,
+  fetchMaybeSubscriptionAccount,
   getCreatePlanInstructionAsync,
   getCreateSubscriptionInstructionAsync,
   getInitializeServiceInstructionAsync,
   getCancelSubscriptionInstruction,
+  getCollectPaymentInstruction,
   type PlanAccount,
   type ServiceAccount,
   type SubscriptionAccount,
@@ -47,6 +50,7 @@ export function useSolbill() {
     Array<{ plan: Address; account: SubscriptionAccount; address: Address }>
   >([]);
   const [txStatus, setTxStatus] = useState<string | null>(null);
+  const [lastSignature, setLastSignature] = useState<string | null>(null);
 
   const walletAddress = wallet?.account.address as Address | undefined;
 
@@ -238,6 +242,7 @@ export function useSolbill() {
         treasury,
       });
       const signature = await send({ instructions: [instruction] });
+      setLastSignature(signature ?? null);
       setTxStatus(`Service initialized! Syncing...`);
       const serviceAddr = await getServiceAddress(
         wallet.account.address as Address
@@ -274,6 +279,7 @@ export function useSolbill() {
         ...args,
       });
       const signature = await send({ instructions: [instruction] });
+      setLastSignature(signature ?? null);
       setTxStatus(`Plan created! Syncing...`);
       await pollForAccount(planAddr);
       await new Promise((r) => setTimeout(r, 1000));
@@ -310,6 +316,7 @@ export function useSolbill() {
         treasury: service.treasury,
       });
       const signature = await send({ instructions: [instruction] });
+      setLastSignature(signature ?? null);
       setTxStatus(`Subscription successful! Syncing...`);
       await pollForAccount(subscriptionAddr);
       await new Promise((r) => setTimeout(r, 1000));
@@ -343,9 +350,53 @@ export function useSolbill() {
       });
 
       const signature = await send({ instructions: [instruction] });
+      setLastSignature(signature ?? null);
       setTxStatus(`Subscription canceled! Syncing...`);
       // Sleep for 2.5 seconds to allow RPC to drop the deleted account before refresh
       await new Promise((resolve) => setTimeout(resolve, 2500));
+      await refresh();
+      return signature;
+    } catch (err) {
+      setTxStatus(
+        `Error: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+      throw err;
+    }
+  };
+
+  const collectPayment = async (subscriptionAddress: Address) => {
+    if (!wallet || !client) return;
+    try {
+      setTxStatus("Collecting payment...");
+      const subResult = await fetchMaybeSubscriptionAccount(
+        client.runtime.rpc,
+        subscriptionAddress
+      );
+      if (!subResult.exists) {
+        setTxStatus("Error: Subscription not found");
+        return;
+      }
+      const sub = subResult.data;
+      const serviceResult = await fetchServiceAccount(client.runtime.rpc, sub.service);
+      const svc = serviceResult.data;
+      const crankerAta = await getAssociatedTokenAddress(
+        svc.acceptedMint,
+        walletAddress!
+      );
+
+      const instruction = getCollectPaymentInstruction({
+        cranker: wallet.account as unknown as TransactionSigner,
+        service: sub.service,
+        subscription: subscriptionAddress,
+        subscriberTokenAccount: sub.subscriberTokenAccount,
+        treasury: svc.treasury,
+        crankerTokenAccount: crankerAta,
+        acceptedMint: svc.acceptedMint,
+      });
+
+      const signature = await send({ instructions: [instruction] });
+      setLastSignature(signature ?? null);
+      setTxStatus(`Payment collected! Reward earned. Syncing...`);
       await refresh();
       return signature;
     } catch (err) {
@@ -364,11 +415,13 @@ export function useSolbill() {
     loading,
     isSending,
     txStatus,
+    lastSignature,
     refresh,
     initializeService,
     createPlan,
     createSubscription,
     cancelSubscription,
+    collectPayment,
     getAssociatedTokenAddress,
   };
 }

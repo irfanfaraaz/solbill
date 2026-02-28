@@ -33,7 +33,7 @@ pub struct ChangePlan<'info> {
 
     #[account(
         mut,
-        seeds = [b"subscription", subscriber.key().as_ref(), old_plan.key().as_ref()],
+        seeds = [b"subscription", subscriber.key().as_ref(), subscription.original_plan.as_ref()],
         bump = subscription.bump,
         has_one = subscriber,
         has_one = service,
@@ -51,7 +51,7 @@ pub struct ChangePlan<'info> {
 
     /// CHECK: The subscription PDA used as delegate.
     #[account(
-        seeds = [b"subscription", subscriber.key().as_ref(), old_plan.key().as_ref()],
+        seeds = [b"subscription", subscriber.key().as_ref(), subscription.original_plan.as_ref()],
         bump,
     )]
     pub delegate: AccountInfo<'info>,

@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 #![allow(unexpected_cfgs)]
+#![allow(deprecated)]
 use anchor_lang::prelude::*;
 
 pub mod errors;

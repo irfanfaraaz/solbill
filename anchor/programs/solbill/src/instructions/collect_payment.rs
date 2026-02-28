@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{
-    transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
-};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use crate::errors::SolBillError;
 use crate::state::{ServiceAccount, SubscriptionAccount, SubscriptionStatus};
@@ -20,7 +18,7 @@ pub struct CollectPayment<'info> {
 
     #[account(
         mut,
-        seeds = [b"subscription", subscription.subscriber.as_ref(), subscription.plan.as_ref()],
+        seeds = [b"subscription", subscription.subscriber.as_ref(), subscription.original_plan.as_ref()],
         bump = subscription.bump,
         has_one = service,
     )]
@@ -90,12 +88,12 @@ pub fn handler(ctx: Context<CollectPayment>) -> Result<()> {
 
         // --- Transfer Logic ---
         let subscriber_key = subscription.subscriber;
-        let plan_key = subscription.plan;
+        let original_plan_key = subscription.original_plan;
         let bump = subscription.bump;
         let signer_seeds: &[&[&[u8]]] = &[&[
             b"subscription",
             subscriber_key.as_ref(),
-            plan_key.as_ref(),
+            original_plan_key.as_ref(),
             &[bump],
         ]];
 

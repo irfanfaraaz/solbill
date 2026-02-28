@@ -65,7 +65,9 @@ export type SubscriptionAccount = {
   subscriber: Address;
   /** Parent `ServiceAccount` pubkey. */
   service: Address;
-  /** The `PlanAccount` this subscription is linked to. */
+  /** Plan at creation — used for PDA derivation. Never changes. */
+  originalPlan: Address;
+  /** Current plan for billing (can change via change_plan). */
   plan: Address;
   /** The subscriber's token account (source of funds). */
   subscriberTokenAccount: Address;
@@ -96,7 +98,9 @@ export type SubscriptionAccountArgs = {
   subscriber: Address;
   /** Parent `ServiceAccount` pubkey. */
   service: Address;
-  /** The `PlanAccount` this subscription is linked to. */
+  /** Plan at creation — used for PDA derivation. Never changes. */
+  originalPlan: Address;
+  /** Current plan for billing (can change via change_plan). */
   plan: Address;
   /** The subscriber's token account (source of funds). */
   subscriberTokenAccount: Address;
@@ -129,6 +133,7 @@ export function getSubscriptionAccountEncoder(): FixedSizeEncoder<SubscriptionAc
       ["discriminator", fixEncoderSize(getBytesEncoder(), 8)],
       ["subscriber", getAddressEncoder()],
       ["service", getAddressEncoder()],
+      ["originalPlan", getAddressEncoder()],
       ["plan", getAddressEncoder()],
       ["subscriberTokenAccount", getAddressEncoder()],
       ["amount", getU64Encoder()],
@@ -155,6 +160,7 @@ export function getSubscriptionAccountDecoder(): FixedSizeDecoder<SubscriptionAc
     ["discriminator", fixDecoderSize(getBytesDecoder(), 8)],
     ["subscriber", getAddressDecoder()],
     ["service", getAddressDecoder()],
+    ["originalPlan", getAddressDecoder()],
     ["plan", getAddressDecoder()],
     ["subscriberTokenAccount", getAddressDecoder()],
     ["amount", getU64Decoder()],
@@ -251,5 +257,5 @@ export async function fetchAllMaybeSubscriptionAccount(
 }
 
 export function getSubscriptionAccountSize(): number {
-  return 198;
+  return 230;
 }

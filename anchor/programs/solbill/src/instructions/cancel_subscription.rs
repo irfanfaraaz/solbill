@@ -17,7 +17,7 @@ pub struct CancelSubscription<'info> {
 
     #[account(
         mut,
-        seeds = [b"subscription", subscriber.key().as_ref(), subscription.plan.as_ref()],
+        seeds = [b"subscription", subscriber.key().as_ref(), subscription.original_plan.as_ref()],
         bump = subscription.bump,
         has_one = subscriber,
         has_one = service,

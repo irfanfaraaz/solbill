@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   Package,
   Loader2,
+  Zap,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { CreatePlanModal } from "./CreatePlanModal";
@@ -339,11 +341,12 @@ export function SolBill() {
   const { status } = useWalletConnection();
   const solbill = useSolbill();
 
-  const [activeTab, setActiveTab] = useState<"merchant" | "subscriber">(
-    "subscriber"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "merchant" | "subscriber" | "crank"
+  >("subscriber");
   const [isPlanModalOpen, setPlanModalOpen] = useState(false);
   const [lookupAddress, setLookupAddress] = useState("");
+  const [crankSubscriptionAddress, setCrankSubscriptionAddress] = useState("");
 
   // Handlers
   const handleInitializeService = async (mint: Address) => {
@@ -381,6 +384,12 @@ export function SolBill() {
     subscription: Address
   ) => {
     await solbill.cancelSubscription(plan, subscription);
+  };
+
+  const handleCollectPayment = async () => {
+    if (!crankSubscriptionAddress.trim()) return;
+    await solbill.collectPayment(crankSubscriptionAddress.trim() as Address);
+    setCrankSubscriptionAddress("");
   };
 
   if (status !== "connected") {
@@ -430,12 +439,58 @@ export function SolBill() {
             <Store className="h-4 w-4" />
             Merchant
           </button>
+          <button
+            onClick={() => setActiveTab("crank")}
+            className={cn(
+              "flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium transition-all duration-300 cursor-pointer",
+              activeTab === "crank"
+                ? "bg-foreground text-background shadow-lg"
+                : "text-muted hover:text-foreground hover:bg-foreground/5"
+            )}
+          >
+            <Zap className="h-4 w-4" />
+            Crank
+          </button>
         </div>
       </div>
 
       <AnimatePresence mode="wait">
         <div className="min-h-[400px]">
-          {activeTab === "merchant" ? (
+          {activeTab === "crank" ? (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-border-low bg-card p-6 shadow-sm">
+                <h3 className="text-xl font-bold text-foreground mb-2">
+                  Collect Payment (Cranker)
+                </h3>
+                <p className="text-sm text-muted mb-4">
+                  Execute due payments and earn crank rewards. Enter a
+                  subscription address that is past its next billing date.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Subscription PDA address"
+                    className="flex-1 rounded-xl border border-border-low bg-background px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    value={crankSubscriptionAddress}
+                    onChange={(e) =>
+                      setCrankSubscriptionAddress(e.target.value)
+                    }
+                  />
+                  <button
+                    onClick={handleCollectPayment}
+                    disabled={
+                      !crankSubscriptionAddress.trim() ||
+                      solbill.isSending ||
+                      solbill.loading
+                    }
+                    className="rounded-xl bg-amber-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {solbill.isSending ? "Collecting..." : "Collect"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : activeTab === "merchant" ? (
             <MerchantView
               key="merchant"
               service={solbill.service}
@@ -506,9 +561,22 @@ export function SolBill() {
             ) : (
               <ShieldCheck className="h-4 w-4 text-green-500" />
             )}
-            <p className="text-xs font-medium text-foreground">
-              {solbill.txStatus || "Syncing with blockchain..."}
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-medium text-foreground">
+                {solbill.txStatus || "Syncing with blockchain..."}
+              </p>
+              {solbill.lastSignature && (
+                <a
+                  href={`https://explorer.solana.com/tx/${solbill.lastSignature}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  View on Explorer
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
           </div>
         </motion.div>
       )}

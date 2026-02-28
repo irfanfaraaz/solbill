@@ -19,9 +19,11 @@ async function handler() {
 }
 
 // Wrap the handler with SolBill logic
-// In a real scenario, these would be the merchant's actual addresses
+// Set env vars for production; fallback to demo placeholders for local dev
 export const GET = withSolbill(handler, {
-  serviceAuthority: "89Qz...merchant_wallet...", // Merchant authority or treasury
-  planAddress: "Plan...subscription_plan...", // The specific plan ID
-  priceUsdc: "0.01", // Pay-as-you-go price
+  serviceAuthority:
+    process.env.NEXT_PUBLIC_SOLBILL_SERVICE_AUTHORITY ?? "89Qz...merchant_wallet...",
+  planAddress:
+    process.env.NEXT_PUBLIC_SOLBILL_PLAN_ADDRESS ?? "Plan...subscription_plan...",
+  priceUsdc: process.env.NEXT_PUBLIC_SOLBILL_PRICE_USDC ?? "0.01",
 });

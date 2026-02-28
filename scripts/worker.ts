@@ -26,7 +26,10 @@ import { join } from "path";
 
 // 1. Configuration
 const PROGRAM_ID = address("AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx");
-const RPC_ENDPOINT = "http://127.0.0.1:8899"; // Change to Devnet if needed
+const RPC_ENDPOINT =
+  process.env.RPC_ENDPOINT ||
+  process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+  "http://127.0.0.1:8899";
 const TOKEN_PROGRAM_ID = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ASSOCIATED_TOKEN_PROGRAM_ID = address(
   "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"

@@ -33,6 +33,54 @@ By leveraging Solana's speed and low fees, SolBill provides a seamless checkout 
 
 ---
 
+## Web2 vs Solana: Design Analysis
+
+### How Subscription Billing Works in Web2
+
+- Centralized database (Postgres) stores services, plans, and subscriptions
+- Stripe or similar payment processor handles recurring charges via stored payment methods
+- Cron jobs or webhooks trigger billing; merchant controls retry logic
+- State: ACID transactions, single source of truth
+- Permissions: API keys, OAuth, role-based access
+
+### How SolBill Works on Solana
+
+- PDAs (Service, Plan, Subscription) replace database tables
+- Token delegation + crankers replace stored cards; no custody of funds
+- Permissionless cranker bots execute `collect_payment` when due
+- State: Immutable accounts, rent-exempt storage
+- Permissions: Signer constraints, PDA seeds, `has_one` checks
+
+### Tradeoffs & Constraints
+
+| Aspect | Web2 | Solana (SolBill) |
+|--------|------|------------------|
+| Custody | Merchant/processor holds payment method | Subscriber delegates exact amount; non-custodial |
+| Automation | Cron/webhooks (centralized) | Permissionless cranker (decentralized) |
+| Finality | Eventual (retries) | Atomic (tx succeeds or fails) |
+| Price lock | Depends on merchant | On-chain; grandfathering enforced |
+| Latency | Sub-second | Block time (~400ms) |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Solana["Solana Program"]
+        Service["Service PDA"]
+        Plan["Plan PDA"]
+        Sub["Subscription PDA"]
+    end
+    Merchant -->|initialize_service| Service
+    Merchant -->|create_plan| Plan
+    Subscriber -->|create_subscription| Sub
+    Cranker -->|collect_payment| Sub
+    Service --> Plan --> Sub
+```
+
+---
+
 ## 💻 Technical Stack
 
 SolBill is engineered for maximum reliability, speed, and developer experience.
@@ -87,6 +135,14 @@ npm run crank
 - **Program ID**: `AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx`
 - **Network**: Solana Devnet
 - **Verification**: [View on Solana Explorer](https://explorer.solana.com/address/AK2xA7SHMKPqvQEirLUNf4gRQjzpQZT3q6v3d62kLyzx?cluster=devnet)
+
+### Devnet Transaction Examples
+
+- **Program upgrade**: [4RLriJ6n84ytxf6b1XwKraVyUKsVf6JH46M1dyavPndKriAJ51rbRd4ptY4r8Wd6jSmmkTHLhfC29QMS4tTFQjPo](https://explorer.solana.com/tx/4RLriJ6n84ytxf6b1XwKraVyUKsVf6JH46M1dyavPndKriAJ51rbRd4ptY4r8Wd6jSmmkTHLhfC29QMS4tTFQjPo?cluster=devnet)
+- **initialize_service**: [5AhZvy8sLPjRHDuyrHxyJ5Bgqi6p16ASZDn9Xjdzd54S9yC39uRa7neqinqNhhJFjho3QmTdMzmfGHu75bh7UUvZ](https://explorer.solana.com/tx/5AhZvy8sLPjRHDuyrHxyJ5Bgqi6p16ASZDn9Xjdzd54S9yC39uRa7neqinqNhhJFjho3QmTdMzmfGHu75bh7UUvZ?cluster=devnet)
+- **create_plan**: [btemwCeZ49Sj8H5ZGtKAsfe7ULsZeEJb7VFENZLzSTaWMXzum16dLsU5QjRzYFPmm1LBMkZtfaM78P91YDNbeqF](https://explorer.solana.com/tx/btemwCeZ49Sj8H5ZGtKAsfe7ULsZeEJb7VFENZLzSTaWMXzum16dLsU5QjRzYFPmm1LBMkZtfaM78P91YDNbeqF?cluster=devnet)
+- **create_subscription**: [2KJoy2CEU37tqWRkQzAGNLt1DKdYX63c3SHJnPhzRTSANCnDJBdaX27xsnWPTq5xqhC7QNHezP5BJfWwTHUCmtZs](https://explorer.solana.com/tx/2KJoy2CEU37tqWRkQzAGNLt1DKdYX63c3SHJnPhzRTSANCnDJBdaX27xsnWPTq5xqhC7QNHezP5BJfWwTHUCmtZs?cluster=devnet)
+- **collect_payment**: [3ioozEZy2wN3EZdhnhgK2qhVcUrDdZ2Yz8FZChKe6HPLcQ8gFDFAUiJbA9cyADGncwqZ76cfbHhagZcW7SaajeQS](https://explorer.solana.com/tx/3ioozEZy2wN3EZdhnhgK2qhVcUrDdZ2Yz8FZChKe6HPLcQ8gFDFAUiJbA9cyADGncwqZ76cfbHhagZcW7SaajeQS?cluster=devnet)
 
 Our robust, production-ready implementation shifts the complex logic of SaaS billing onto Solana's decentralized architecture. LiteSVM integration tests verify all mathematical edge cases in milliseconds, ensuring absolute stability for variable billing terms.
 

@@ -10,10 +10,8 @@ import {
   combineCodec,
   fixDecoderSize,
   fixEncoderSize,
-  getAddressEncoder,
   getBytesDecoder,
   getBytesEncoder,
-  getProgramDerivedAddress,
   getStructDecoder,
   getStructEncoder,
   transformEncoder,
@@ -33,11 +31,7 @@ import {
   type WritableAccount,
 } from "@solana/kit";
 import { SOLBILL_PROGRAM_ADDRESS } from "../programs";
-import {
-  expectAddress,
-  getAccountMetaFactory,
-  type ResolvedAccount,
-} from "../shared";
+import { getAccountMetaFactory, type ResolvedAccount } from "../shared";
 
 export const CHANGE_PLAN_DISCRIMINATOR = new Uint8Array([
   75, 206, 141, 79, 34, 245, 125, 189,
@@ -117,147 +111,6 @@ export function getChangePlanInstructionDataCodec(): FixedSizeCodec<
     getChangePlanInstructionDataEncoder(),
     getChangePlanInstructionDataDecoder(),
   );
-}
-
-export type ChangePlanAsyncInput<
-  TAccountSubscriber extends string = string,
-  TAccountService extends string = string,
-  TAccountOldPlan extends string = string,
-  TAccountNewPlan extends string = string,
-  TAccountSubscription extends string = string,
-  TAccountSubscriberTokenAccount extends string = string,
-  TAccountDelegate extends string = string,
-  TAccountTokenProgram extends string = string,
-> = {
-  subscriber: TransactionSigner<TAccountSubscriber>;
-  service: Address<TAccountService>;
-  /** The old plan (validated via subscription.plan). */
-  oldPlan: Address<TAccountOldPlan>;
-  /** The new plan to switch to. */
-  newPlan: Address<TAccountNewPlan>;
-  subscription?: Address<TAccountSubscription>;
-  /** The subscriber's token account. */
-  subscriberTokenAccount: Address<TAccountSubscriberTokenAccount>;
-  delegate?: Address<TAccountDelegate>;
-  tokenProgram?: Address<TAccountTokenProgram>;
-};
-
-export async function getChangePlanInstructionAsync<
-  TAccountSubscriber extends string,
-  TAccountService extends string,
-  TAccountOldPlan extends string,
-  TAccountNewPlan extends string,
-  TAccountSubscription extends string,
-  TAccountSubscriberTokenAccount extends string,
-  TAccountDelegate extends string,
-  TAccountTokenProgram extends string,
-  TProgramAddress extends Address = typeof SOLBILL_PROGRAM_ADDRESS,
->(
-  input: ChangePlanAsyncInput<
-    TAccountSubscriber,
-    TAccountService,
-    TAccountOldPlan,
-    TAccountNewPlan,
-    TAccountSubscription,
-    TAccountSubscriberTokenAccount,
-    TAccountDelegate,
-    TAccountTokenProgram
-  >,
-  config?: { programAddress?: TProgramAddress },
-): Promise<
-  ChangePlanInstruction<
-    TProgramAddress,
-    TAccountSubscriber,
-    TAccountService,
-    TAccountOldPlan,
-    TAccountNewPlan,
-    TAccountSubscription,
-    TAccountSubscriberTokenAccount,
-    TAccountDelegate,
-    TAccountTokenProgram
-  >
-> {
-  // Program address.
-  const programAddress = config?.programAddress ?? SOLBILL_PROGRAM_ADDRESS;
-
-  // Original accounts.
-  const originalAccounts = {
-    subscriber: { value: input.subscriber ?? null, isWritable: false },
-    service: { value: input.service ?? null, isWritable: false },
-    oldPlan: { value: input.oldPlan ?? null, isWritable: false },
-    newPlan: { value: input.newPlan ?? null, isWritable: false },
-    subscription: { value: input.subscription ?? null, isWritable: true },
-    subscriberTokenAccount: {
-      value: input.subscriberTokenAccount ?? null,
-      isWritable: true,
-    },
-    delegate: { value: input.delegate ?? null, isWritable: false },
-    tokenProgram: { value: input.tokenProgram ?? null, isWritable: false },
-  };
-  const accounts = originalAccounts as Record<
-    keyof typeof originalAccounts,
-    ResolvedAccount
-  >;
-
-  // Resolve default values.
-  if (!accounts.subscription.value) {
-    accounts.subscription.value = await getProgramDerivedAddress({
-      programAddress,
-      seeds: [
-        getBytesEncoder().encode(
-          new Uint8Array([
-            115, 117, 98, 115, 99, 114, 105, 112, 116, 105, 111, 110,
-          ]),
-        ),
-        getAddressEncoder().encode(expectAddress(accounts.subscriber.value)),
-        getAddressEncoder().encode(expectAddress(accounts.oldPlan.value)),
-      ],
-    });
-  }
-  if (!accounts.delegate.value) {
-    accounts.delegate.value = await getProgramDerivedAddress({
-      programAddress,
-      seeds: [
-        getBytesEncoder().encode(
-          new Uint8Array([
-            115, 117, 98, 115, 99, 114, 105, 112, 116, 105, 111, 110,
-          ]),
-        ),
-        getAddressEncoder().encode(expectAddress(accounts.subscriber.value)),
-        getAddressEncoder().encode(expectAddress(accounts.oldPlan.value)),
-      ],
-    });
-  }
-  if (!accounts.tokenProgram.value) {
-    accounts.tokenProgram.value =
-      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address<"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA">;
-  }
-
-  const getAccountMeta = getAccountMetaFactory(programAddress, "programId");
-  return Object.freeze({
-    accounts: [
-      getAccountMeta(accounts.subscriber),
-      getAccountMeta(accounts.service),
-      getAccountMeta(accounts.oldPlan),
-      getAccountMeta(accounts.newPlan),
-      getAccountMeta(accounts.subscription),
-      getAccountMeta(accounts.subscriberTokenAccount),
-      getAccountMeta(accounts.delegate),
-      getAccountMeta(accounts.tokenProgram),
-    ],
-    data: getChangePlanInstructionDataEncoder().encode({}),
-    programAddress,
-  } as ChangePlanInstruction<
-    TProgramAddress,
-    TAccountSubscriber,
-    TAccountService,
-    TAccountOldPlan,
-    TAccountNewPlan,
-    TAccountSubscription,
-    TAccountSubscriberTokenAccount,
-    TAccountDelegate,
-    TAccountTokenProgram
-  >);
 }
 
 export type ChangePlanInput<

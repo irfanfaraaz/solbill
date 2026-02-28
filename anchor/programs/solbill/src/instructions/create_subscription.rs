@@ -68,6 +68,7 @@ pub fn handler(ctx: Context<CreateSubscription>) -> Result<()> {
         let subscription = &mut ctx.accounts.subscription;
         subscription.subscriber = ctx.accounts.subscriber.key();
         subscription.service = ctx.accounts.service.key();
+        subscription.original_plan = plan.key();
         subscription.plan = plan.key();
         subscription.subscriber_token_account = ctx.accounts.subscriber_token_account.key();
         subscription.amount = plan.amount;

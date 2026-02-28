@@ -7,6 +7,7 @@ pub mod expire_subscription;
 pub mod initialize_service;
 pub mod update_plan;
 
+#[allow(ambiguous_glob_reexports)]
 pub use cancel_subscription::*;
 pub use change_plan::*;
 pub use collect_payment::*;

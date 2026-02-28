@@ -17,7 +17,9 @@ pub struct SubscriptionAccount {
     pub subscriber: Pubkey,
     /// Parent `ServiceAccount` pubkey.
     pub service: Pubkey,
-    /// The `PlanAccount` this subscription is linked to.
+    /// Plan at creation — used for PDA derivation. Never changes.
+    pub original_plan: Pubkey,
+    /// Current plan for billing (can change via change_plan).
     pub plan: Pubkey,
     /// The subscriber's token account (source of funds).
     pub subscriber_token_account: Pubkey,

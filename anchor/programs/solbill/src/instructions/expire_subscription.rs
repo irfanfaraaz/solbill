@@ -16,7 +16,7 @@ pub struct ExpireSubscription<'info> {
 
     #[account(
         mut,
-        seeds = [b"subscription", subscription.subscriber.as_ref(), subscription.plan.as_ref()],
+        seeds = [b"subscription", subscription.subscriber.as_ref(), subscription.original_plan.as_ref()],
         bump = subscription.bump,
         close = cranker,
         constraint = subscription.plan == plan.key(),
