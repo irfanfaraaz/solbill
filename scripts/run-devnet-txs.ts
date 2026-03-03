@@ -29,9 +29,7 @@ import {
   getCreateSubscriptionInstructionAsync,
   getCollectPaymentInstruction,
   fetchMaybeServiceAccount,
-  fetchServiceAccount,
   fetchMaybeSubscriptionAccount,
-  getSubscriptionAccountSize,
 } from "../app/generated/solbill";
 
 const RPC = process.env.RPC_ENDPOINT || "https://api.devnet.solana.com";
@@ -102,6 +100,7 @@ async function sendTx(ix: InstructionLike, signer: Awaited<ReturnType<typeof cre
     createTransactionMessage({ version: 0 }),
     (m) => setTransactionMessageFeePayerSigner(signer, m),
     (m) => setTransactionMessageLifetimeUsingBlockhash(blockhash, m),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (m) => appendTransactionMessageInstruction(ix as any, m)
   );
   const signed = await signTransactionMessageWithSigners(msg);
